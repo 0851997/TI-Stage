@@ -1,0 +1,43 @@
+<module>
+	<adapter name="TestAdapter" active="${TestAdapter.active}">
+		<receiver
+			name="Receiver"
+			className="nl.nn.adapterframework.receivers.GenericReceiver">
+			<listener
+				name="DirectoryListener"
+				className="nl.nn.adapterframework.receivers.DirectoryListener"
+				inputDirectory="C:\Users\Robert\Desktop\inputDirectory"
+				wildcard="*.txt"
+				outputDirectory="C:\Users\Robert\Desktop\outputDirectory"
+				processedDirectory="C:\Users\Robert\Desktop\processedDirectory"
+				numberOfBackups="0"
+				minStableTime="10000"/>
+		</receiver>
+		
+		<pipeline firstPipe="FilePipe">
+			<exits>
+				<exit path="EXIT" state="success"/>
+			</exits>
+			<pipe
+				name="FilePipe"
+				className="nl.nn.adapterframework.pipes.FilePipe"
+				directory="C:\Users\Robert\Desktop\outputDirectory"
+				fileName="S3TestFile"
+				actions="read"
+				outputType="string">
+				<forward name="succes" path="SendingPipe"/>
+			</pipe>				
+			<pipe
+				name="SendingPipe"
+				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
+				<sender name="S3Sender"
+						className="nl.nn.adapterframework.senders.S3Sender"
+						clientRegion="us-west-1"
+						bucketName="robert-test-bucket"
+						objectKey="ReadmeFromDesktop"/>
+   				<forward name="success" path="EXIT" />
+			</pipe>			
+		</pipeline>	
+		
+	</adapter>
+</module>
