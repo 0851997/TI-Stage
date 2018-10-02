@@ -15,6 +15,8 @@
 */
 package nl.nn.adapterframework.senders;
 
+import java.io.File;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -34,12 +36,16 @@ import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.CreateBucketRequest;
+import com.amazonaws.services.s3.model.ObjectMetadata;
 
 import nl.nn.adapterframework.configuration.ConfigurationException;
+import nl.nn.adapterframework.core.ParameterException;
 import nl.nn.adapterframework.core.SenderException;
 import nl.nn.adapterframework.core.SenderWithParametersBase;
 import nl.nn.adapterframework.core.TimeOutException;
 import nl.nn.adapterframework.parameters.ParameterResolutionContext;
+import nl.nn.adapterframework.parameters.ParameterValue;
+import nl.nn.adapterframework.parameters.ParameterValueList;
 import nl.nn.adapterframework.util.CredentialFactory;
 
 /**
@@ -50,58 +56,61 @@ import nl.nn.adapterframework.util.CredentialFactory;
 public class S3Sender extends SenderWithParametersBase
 {
 	// fields
-	/*private String credsAlias;
-	private String accessKeyID;
-	private String secretAccessKey;
-	private CredentialFactory credentials;*/	
+	/*
+	 * private String credsAlias; private String accessKeyID; private String
+	 * secretAccessKey; private CredentialFactory credentials;
+	 */
 	private String name;
-	
+
+	private AmazonS3ClientBuilder s3ClientBuilder;
 	private AmazonS3 s3Client;
 	private boolean pathStyleAccessEnabled = false;
 	private boolean chunkedEncodingDisabled = false;
-	private boolean accelerateModeEnabled = false;				//this may involve some extra costs
+	private boolean accelerateModeEnabled = false; // this may involve some extra costs
 	private boolean payloadSigningEnabled = false;
 	private boolean dualstackEnabled = false;
 	private boolean forceGlobalBucketAccessEnabled = false;
 	private String clientRegion = Regions.EU_CENTRAL_1.getName();
 	private List<String> regions = getAvailableRegions();
-	
+
 	private String bucketName;
 	private String objectKey;
-	
-	
+	private String fileName;
+
 	@Override
 	public void configure() throws ConfigurationException
 	{
 		super.configure();
-		/*if (StringUtils.isEmpty(getAccessKeyID()) && StringUtils.isEmpty(getSecretAccessKey()))
-		{
-			throw new ConfigurationException(getLogPrefix() + " must specify accessKeyID and secretAccessKey to access the service");
-		}*/
-		if (StringUtils.isEmpty(bucketName))
+		/*
+		 * if (StringUtils.isEmpty(getAccessKeyID()) &&
+		 * StringUtils.isEmpty(getSecretAccessKey())) { throw new
+		 * ConfigurationException(getLogPrefix() +
+		 * " must specify accessKeyID and secretAccessKey to access the service"); }
+		 */
+		if (StringUtils.isEmpty(bucketName)) 
 			throw new ConfigurationException(getLogPrefix() + " must specify bucketName for the destination");
 
-		if(!regions.contains(getClientRegion()))
-			throw new ConfigurationException(getLogPrefix()+" unknown or invalid region ["+getClientRegion()+"] supported regions are: "+regions.toString());
+		if (!regions.contains(getClientRegion())) 
+			throw new ConfigurationException(getLogPrefix() + " unknown or invalid region [" + getClientRegion() + "] supported regions are: " + regions.toString());
 
+		// credentials = new CredentialFactory(getCredsAlias(), getAccessKeyID(),
+		// getSecretAccessKey());
+		// BasicAWSCredentials awsCreds = new BasicAWSCredentials(getAccessKeyID(),
+		// getSecretAccessKey());
+		s3ClientBuilder = AmazonS3ClientBuilder.standard()
+											.withPathStyleAccessEnabled(isPathStyleAccessEnabled())
+                            				.withChunkedEncodingDisabled(isChunkedEncodingDisabled())
+                            				.withAccelerateModeEnabled(isAccelerateModeEnabled())
+                            				.withPayloadSigningEnabled(isPayloadSigningEnabled()).withDualstackEnabled(isDualstackEnabled())
+                            				.withForceGlobalBucketAccessEnabled(isForceGlobalBucketAccessEnabled()).withRegion(getClientRegion())
+                            				.withCredentials(new EnvironmentVariableCredentialsProvider() /* new AWSStaticCredentialsProvider(awsCreds) */);
 
-		//credentials = new CredentialFactory(getCredsAlias(), getAccessKeyID(), getSecretAccessKey());
-		//BasicAWSCredentials awsCreds = new BasicAWSCredentials(getAccessKeyID(), getSecretAccessKey());
-		s3Client = AmazonS3ClientBuilder.standard()
-										.withPathStyleAccessEnabled(isPathStyleAccessEnabled())
-										.withChunkedEncodingDisabled(isChunkedEncodingDisabled())
-										.withAccelerateModeEnabled(isAccelerateModeEnabled())
-										.withPayloadSigningEnabled(isPayloadSigningEnabled())
-										.withDualstackEnabled(isDualstackEnabled())
-										.withForceGlobalBucketAccessEnabled(isForceGlobalBucketAccessEnabled())
-										.withRegion(getClientRegion())
-										.withCredentials(new EnvironmentVariableCredentialsProvider() /*new AWSStaticCredentialsProvider(awsCreds)*/)
-										.build();
-
+		
 	}
 
 	public void open()
 	{
+		s3Client = s3ClientBuilder.build();
 
 	}
 
@@ -112,36 +121,50 @@ public class S3Sender extends SenderWithParametersBase
 
 	public String sendMessage(String correlationID, String message, ParameterResolutionContext prc) throws SenderException, TimeOutException
 	{
+		ParameterValueList pvl = null;
 		try
 		{
-			if (s3Client.doesBucketExistV2(bucketName))
+			if (prc != null && paramList != null)
 			{
-				System.out.println("Bucket exists.\n" + "bucketName: " + bucketName);
-				s3Client.putObject(bucketName, objectKey, message);
-			} 
-			else
+				pvl = prc.getValues(paramList);
+			}
+		} catch (ParameterException e)
+		{
+			throw new SenderException(
+					getLogPrefix() + "Sender [" + getName() + "] caught exception evaluating parameters", e);
+		}
+		if (pvl.getParameterValue("file") != null)
+		{
+			ParameterValue piet = pvl.getParameterValue("file");
+			if (piet != null)
 			{
-				System.out.println("Creating new bucket...");
-				s3Client.createBucket(bucketName);
-				s3Client.putObject(bucketName, objectKey, message);
+				InputStream fileStream = (InputStream) piet.getValue();
 			}
 		}
-		catch (AmazonServiceException e)
+		String fileName = pvl.getParameterValue("objectKey").asStringValue(objectKey);
+		String contentType = pvl.getParameterValue("contentType").asStringValue("application/octet-steam");
+
+		try
+		{
+			ObjectMetadata metadata = new ObjectMetadata();
+			metadata.setContentType("image/jpg");
+			s3Client.putObject(bucketName, fileName, fileStream, metadata);
+			System.out.println("Object uploaded into a S3 bucket !");
+		} catch (AmazonServiceException e)
 		{
 			// The call was transmitted successfully, but Amazon S3 couldn't process
 			// it, so it returned an error response.
 			e.printStackTrace();
-		} 
-		catch (SdkClientException e)
+		} catch (SdkClientException e)
 		{
 			// Amazon S3 couldn't be contacted for a response, or the client
 			// couldn't parse the response from Amazon S3.
 			e.printStackTrace();
 		}
-		
+
 		return message;
 	}
-	
+
 	public List<String> getAvailableRegions()
 	{
 		List<String> availableRegions = new ArrayList<String>(Regions.values().length);
@@ -149,8 +172,8 @@ public class S3Sender extends SenderWithParametersBase
 		{
 			availableRegions.add(region.getName());
 		}
-		//System.out.println(availableRegions);
-		
+		// System.out.println(availableRegions);
+
 		return availableRegions;
 	}
 
@@ -252,6 +275,16 @@ public class S3Sender extends SenderWithParametersBase
 	public void setObjectKey(String objectKey)
 	{
 		this.objectKey = objectKey;
+	}
+
+	public String getFileName()
+	{
+		return fileName;
+	}
+
+	public void setFileName(String fileName)
+	{
+		this.fileName = fileName;
 	}
 
 	/*

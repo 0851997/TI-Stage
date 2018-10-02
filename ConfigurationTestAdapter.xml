@@ -4,40 +4,47 @@
 			name="Receiver"
 			className="nl.nn.adapterframework.receivers.GenericReceiver">
 			<listener
-				name="DirectoryListener"
-				className="nl.nn.adapterframework.receivers.DirectoryListener"
-				inputDirectory="C:\Users\Robert\Desktop\inputDirectory"
-				wildcard="*.txt"
-				outputDirectory="C:\Users\Robert\Desktop\outputDirectory"
-				processedDirectory="C:\Users\Robert\Desktop\processedDirectory"
-				numberOfBackups="0"
-				minStableTime="10000"/>
+				name="MyListener"
+				className="nl.nn.adapterframework.receivers.JavaListener"/>
 		</receiver>
 		
-		<pipeline firstPipe="FilePipe">
+		<pipeline firstPipe="saveFileName">
 			<exits>
 				<exit path="EXIT" state="success"/>
 			</exits>
-			<pipe
+			
+ 			<pipe
+				name="saveFileName"
+				className="nl.nn.adapterframework.pipes.EchoPipe"
+				storeResultInSessionKey="mijnMooieNaam"
+				>
+			</pipe>
+
+ 			<pipe
 				name="FilePipe"
 				className="nl.nn.adapterframework.pipes.FilePipe"
-				directory="C:\Users\Robert\Desktop\outputDirectory"
-				fileName="S3TestFile"
+				directory="C:\Users\Robert\Desktop\"
 				actions="read"
-				outputType="string">
-				<forward name="succes" path="SendingPipe"/>
-			</pipe>				
+				outputType="stream"
+				storeResultInSessionKey="mijnMooieFile"
+				>
+			</pipe>
+
 			<pipe
 				name="SendingPipe"
+				getInputFromFixedValue="test"
 				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
 				<sender name="S3Sender"
 						className="nl.nn.adapterframework.senders.S3Sender"
 						clientRegion="us-west-1"
 						bucketName="robert-test-bucket"
-						objectKey="ReadmeFromDesktop"/>
+						objectKey="OutputFromS3Sender">
+						<param name="file" sessionKey="mijnMooieFile" />
+						<param name="objectKey" sessionKey="mijnMooieNaam" />
+					</sender>
    				<forward name="success" path="EXIT" />
-			</pipe>			
+			</pipe>
+			
 		</pipeline>	
-		
 	</adapter>
 </module>
