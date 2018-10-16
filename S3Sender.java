@@ -136,7 +136,6 @@ public class S3Sender extends SenderWithParametersBase
 	private String action;
 	private String bucketName;
 	private String objectKey;
-	
 
 	@Override
 	public void configure() throws ConfigurationException
@@ -182,33 +181,34 @@ public class S3Sender extends SenderWithParametersBase
 	{
 		s3Client.shutdown();
 	}
-	
-	
 
 	public String sendMessage(String correlationID, String message, ParameterResolutionContext prc) throws SenderException, TimeOutException
 	{
-		if(getAction().equals("uploadObject"))
-		{  		
-			//fills ParameterValueList pvl with the set parameters from S3Sender
-    		ParameterValueList pvl = null;
-    		try
-    		{
-    			if (prc != null && paramList != null)
-    			{
-    				pvl = prc.getValues(paramList);
-    			}
-    			//uploadObject(pvl);
-    		} 
-    		catch (ParameterException e)
-    		{
-    			throw new SenderException(getLogPrefix() + "Sender [" + getName() + "] caught exception evaluating parameters", e);
-    		}
-		}
-		else if(getAction().equals("downloadObject"))
+		//fills ParameterValueList pvl with the set parameters from S3Sender
+		ParameterValueList pvl = null;
+		try
 		{
-			
+			if (prc != null && paramList != null)
+				pvl = prc.getValues(paramList);
+		} 
+		catch (ParameterException e)
+		{
+			throw new SenderException(getLogPrefix() + "Sender [" + getName() + "] caught exception evaluating parameters", e);
 		}
-
+		
+		if(getAction().equals("createBucket"))
+			createBucket(getBucketName());
+		else if(getAction().equals("deleteBucket"))
+			deleteBucket(getBucketName());
+		else if(getAction().equals("uploadObject"))
+			uploadObject(getBucketName(), getObjectKey(), pvl);
+		else if(getAction().equals("downloadObject"))
+			downloadObject(getBucketName(), getObjectKey());
+		else if(getAction().equals("copyObject"))
+			copyObject(pvl);
+		else if(getAction().equals("deleteObject"))
+			deleteBucket(getBucketName());
+		
 		return message;
 	}
 	
@@ -332,6 +332,8 @@ public class S3Sender extends SenderWithParametersBase
 			throw new SenderException(getLogPrefix() + " object with given name doesn't exist, please specify existing bucketKey");	
 	}
 
+	
+	//getters and setters
 	public String getName()
 	{
 		return name;
