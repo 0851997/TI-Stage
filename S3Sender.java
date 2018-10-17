@@ -62,7 +62,7 @@ import nl.nn.adapterframework.util.CredentialFactory;
 /**
  * <p>
  * S3Sender, makes possible for Ibis developer to interact with Amazon Simple Storage Service (Amazon S3). It allows to create
- * and delete buckets. More so it makes it possible for you to upload object(s) inside a bucket, delete object(s) from a bucket and 
+ * and delete buckets. More so it makes possible for you to upload object(s) inside a bucket, delete object(s) from a bucket and 
  * copy object(s) from one bucket too another.
  * </p>
  * 
@@ -74,15 +74,18 @@ import nl.nn.adapterframework.util.CredentialFactory;
  * <tr><td>{@link #setChunkedEncodingDisabled(boolean) chunkedEncodingDisabled}</td><td>Configures the client to disable chunked encoding for all requests.</td><td>false</td></tr>
  * <tr><td>{@link #setAccelerateModeEnabled(boolean) accelerateModeEnabled}</td><td>Configures the client to use S3 accelerate endpoint for all requests. A bucket by default cannot be accessed in accelerate mode. If you wish to do so, you need to enable the accelerate configuration for the bucket in advance. (This includes extra costs)</td><td>false</td></tr>
  * <tr><td>{@link #setForceGlobalBucketAccessEnabled(boolean) forceGlobalBucketAccessEnabled}</td><td>Configure whether global bucket access is enabled for this client. When enabled client in a specified region is allowed to create buckets in other regions.</td><td>false</td></tr>
- * <tr><td>{@link #setAction(String) action}</td><td>Action to be performed. Possible action values:
- * <ul>
- * <li>createBucket: create a new bucket inside Amazon S3</li>
+ * <tr><td>{@link #setBucketCreationEnabled(boolean) bucketCreationEnabled}</td><td>When uploading an object to a non existent bucket, this attribute must be set to 'true' which allows the creation of the new bucket. Otherwise an exception will be thrown.</td><td>false</td></tr>
+ * 
+ * <tr>   <td>{@link #setAction(String) action}</td>   <td>Action to be performed. Possible action values:
+ * <ul><li>createBucket: create a new bucket inside Amazon S3</li>
  * <li>deleteBucket: delete an existing bucket from S3</li>
  * <li>uploadObject: puts an object inside a S3 bucket</li>
  * <li>downloadObject: gets an object from a S3 bucket for further and safes it in ???</li>
  * <li>copyObject: copies an object from one S3 bucket to another S3 bucket</li>
- * <li>deleteObject: delete an object from inside a S3 bucket</li>
- * </ul></td><td></td></tr>
+ * <li>deleteObject: delete an object from inside a S3 bucket</li></ul>
+ * </td>   <td></td>   </tr>
+ * 
+ * <tr><td>{@link #setClientRegion(String) clientRegion}</td><td>Set a region end point for creation of this client</td><td>"eu-central-1"</td></tr>
  * <tr><td>{@link #setBucketName(String) bucketName}</td><td>Set a new or an existing name for S3 bucket depending on your action</td><td></td></tr>
  * <tr><td>{@link #setObjectKey(String) objectKey}</td><td>Set a new or an existing name for your object depending on your action</td><td></td></tr>
  * </table>
@@ -123,19 +126,21 @@ import nl.nn.adapterframework.util.CredentialFactory;
 
 public class S3Sender extends SenderWithParametersBase
 {
-	private String name;
-
 	private AmazonS3ClientBuilder s3ClientBuilder;
 	private AmazonS3 s3Client;
+	private List<String> regions = getAvailableRegions();
+	private List<String> actions = Arrays.asList("createBucket", "deleteBucket", "uploadObject", "downloadObject", "copyObject", "deleteObject");
+	
+	private String name;
 	private boolean chunkedEncodingDisabled = false;
 	private boolean accelerateModeEnabled = false; // this may involve some extra costs
 	private boolean forceGlobalBucketAccessEnabled = false;
-	private List<String> regions = getAvailableRegions();
+	private boolean bucketCreationEnabled = false;
 	private String clientRegion = Regions.EU_CENTRAL_1.getName();
-	private List<String> actions = Arrays.asList("createBucket", "deleteBucket", "uploadObject", "downloadObject", "copyObject", "deleteObject");
 	private String action;
 	private String bucketName;
 	private String objectKey;
+
 
 	@Override
 	public void configure() throws ConfigurationException
@@ -152,7 +157,7 @@ public class S3Sender extends SenderWithParametersBase
 			throw new ConfigurationException(getLogPrefix() + " bucketName not specified or correct bucket naming is not used, visit AWS to see correct bucket naming");
 
 		ParameterList parameterList = getParameterList();
-		if(!getAction().equals("createBucket") || !getAction().equals("deleteBucket"))
+		if(!(getAction().equals("createBucket") || getAction().equals("deleteBucket")))
 		{
 			if(getObjectKey() == null && parameterList.findParameter("objectKey") == null)
 				throw new ConfigurationException(getLogPrefix() + " minimal objectKey requirement not met, please specify objectKey or objectKey parameter");
@@ -170,6 +175,7 @@ public class S3Sender extends SenderWithParametersBase
                             				.withForceGlobalBucketAccessEnabled(isForceGlobalBucketAccessEnabled())
                             				.withRegion(getClientRegion())
                             				.withCredentials(new EnvironmentVariableCredentialsProvider());
+		
 	}
 
 	public void open()
@@ -205,25 +211,13 @@ public class S3Sender extends SenderWithParametersBase
 		else if(getAction().equals("downloadObject"))
 			downloadObject(getBucketName(), getObjectKey());
 		else if(getAction().equals("copyObject"))
-			copyObject(pvl);
+			copyObject(getBucketName(), getObjectKey(), pvl);
 		else if(getAction().equals("deleteObject"))
 			deleteBucket(getBucketName());
 		
 		return message;
 	}
 	
-	//check for available regions in AWS
-	public List<String> getAvailableRegions()
-	{
-		List<String> availableRegions = new ArrayList<String>(Regions.values().length);
-		for (Regions region : Regions.values())
-		{
-			availableRegions.add(region.getName());
-			// System.out.println(region.getName());
-		}
-
-		return availableRegions;
-	}
 	
 	//creates a bucket, if it does not already exist
 	public void createBucket(String bucketName) throws SenderException
@@ -231,53 +225,48 @@ public class S3Sender extends SenderWithParametersBase
 		if(!s3Client.doesBucketExistV2(bucketName))
 		{
 			CreateBucketRequest createBucketRequest = new CreateBucketRequest(bucketName);
-			s3Client.createBucket(createBucketRequest);
+			s3Client.createBucket(createBucketRequest);			
 		}
 		else
-			throw new SenderException(getLogPrefix() + " bucketName already exists, please specify a unique name for your bucket");
+			throw new SenderException(getLogPrefix() + " bucket with bucketName: "+bucketName+" already exists, please specify a unique bucketName");
 	}
 	
-	//deletes a bucket, if there exists one
+	//this method deletes a bucket if one exists
 	public void deleteBucket(String bucketName) throws SenderException
 	{
-		if(s3Client.doesBucketExistV2(bucketName))
-		{
-			DeleteBucketRequest deleteBucketRequest = new DeleteBucketRequest(bucketName);
-			s3Client.deleteBucket(deleteBucketRequest);
-		}			
-		else
-			throw new SenderException(getLogPrefix() + " bucket with given name doesn't exists, please specify an existing bucketName");	
+		checkBucketExistence(bucketName);
+		DeleteBucketRequest deleteBucketRequest = new DeleteBucketRequest(bucketName);
+		s3Client.deleteBucket(deleteBucketRequest);
 	}
 	
 	//upload an InputStream to S3 Bucket as an object
 	public void uploadObject(String bucketName, String objectKey, ParameterValueList pvl) throws SenderException
 	{
 		if (pvl.getParameterValue("outputFile") != null)
-		{
-			//parameters for a PutObjectRequest
-			InputStream inputStream = (InputStream) pvl.getParameterValue("outputFile").getValue();
+		{	
+			bucketCreationForObjectAction(bucketName);
 			String tempObjectKey = pvl.getParameterValue("objectKey").asStringValue(objectKey);
+			InputStream inputStream = (InputStream) pvl.getParameterValue("outputFile").getValue();
 			ObjectMetadata metadata = new ObjectMetadata();
-			//String contentType = pvl.getParameterValue("contentType").asStringValue("application/octet-stream");
 			metadata.setContentType("application/octet-stream");
-			
-			//request construction and object upload
 			PutObjectRequest putObjectRequest = new PutObjectRequest(bucketName, tempObjectKey, inputStream, metadata);
 			s3Client.putObject(putObjectRequest);
-			
-			System.out.println("Object uploaded into a S3 bucket!");
+			System.out.println("Object uploaded into a S3 bucket!");				
 		}
 		else
-			throw new SenderException(getLogPrefix() + " possible that outputFile parameter is not found in the ParameterValueList");
+			throw new SenderException(getLogPrefix() + " outputFile parameter is not found in the ParameterValueList");
 	}
 	
 	//get an object from S3 Bucket and 
-	public void downloadObject(String bucketName, String objectKey)
+	public void downloadObject(String bucketName, String objectKey) throws SenderException
 	{
 		try
 		{
+			checkBucketExistence(bucketName);
+			checkObjectExistence(bucketName, objectKey);
 			GetObjectRequest getObjectRequest = new GetObjectRequest(bucketName, objectKey);
 			S3Object s3Object = s3Client.getObject(getObjectRequest);
+			
 			S3ObjectInputStream s3InputStream = s3Object.getObjectContent(); //slaan de data van S3 object in s3InputStream op
 			FileOutputStream fileOutputStream = new FileOutputStream(new File("C:\\Users\\Robert\\Desktop\\ObjectContentFromS3Bucket.jpg"));
 			byte[] readBuffer = new byte[s3InputStream.available()];
@@ -286,34 +275,32 @@ public class S3Sender extends SenderWithParametersBase
 	        {
 	            fileOutputStream.write(readBuffer, 0, readLength);
 	        }
-	        System.out.println("Object downloaded.");
 	        
 	        s3InputStream.close();
 	        fileOutputStream.close();
 		}
 		catch (FileNotFoundException e1)
 		{
-			// TODO Auto-generated catch block
 			e1.printStackTrace();
 		}
 		catch (IOException e)
 		{
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 			
-		System.out.println("Object downloaded or forwarded!");
+		System.out.println("Object downloaded and all the streams closed!");
 	}
 	
-	public void copyObject(ParameterValueList pvl) throws SenderException
+	public void copyObject(String bucketName, String objectKey, ParameterValueList pvl) throws SenderException
 	{
 		if (pvl.getParameterValue("destinationBucketName") != null && pvl.getParameterValue("destinationObjectKey") != null)
 		{
+			checkBucketExistence(bucketName);
+			checkObjectExistence(bucketName, objectKey);
 			String destinationBucketName = pvl.getParameterValue("destinationBucketName").getValue().toString();
 			String destinationObjectKey = pvl.getParameterValue("destinationObjectKey").getValue().toString();
-			CopyObjectRequest copyObjectRequest = new CopyObjectRequest(getBucketName(), getObjectKey(), destinationBucketName, destinationObjectKey);
-			if(!s3Client.doesBucketExistV2(destinationBucketName))
-				createBucket(destinationBucketName);
+			bucketCreationForObjectAction(destinationBucketName);
+			CopyObjectRequest copyObjectRequest = new CopyObjectRequest(bucketName, objectKey, destinationBucketName, destinationObjectKey);
 			s3Client.copyObject(copyObjectRequest);
 			System.out.println("Object copied from one bucket to another");
 		}
@@ -323,17 +310,53 @@ public class S3Sender extends SenderWithParametersBase
 	
 	public void deleteObject(String bucketName, String objectKey) throws SenderException
 	{
-		if(s3Client.doesObjectExist(objectKey, objectKey))
-		{
-			DeleteObjectRequest deleteObjectRequest = new DeleteObjectRequest(bucketName, objectKey);
-			s3Client.deleteObject(deleteObjectRequest);
-		}			
-		else
-			throw new SenderException(getLogPrefix() + " object with given name doesn't exist, please specify existing bucketKey");	
+		checkBucketExistence(bucketName);
+		checkObjectExistence(bucketName, objectKey);
+		DeleteObjectRequest deleteObjectRequest = new DeleteObjectRequest(bucketName, objectKey);
+		s3Client.deleteObject(deleteObjectRequest);	
+	}
+	
+	
+	
+	public void bucketCreationForObjectAction(String bucketName) throws SenderException
+	{
+		if(isBucketCreationEnabled() && !s3Client.doesBucketExistV2(bucketName))
+			createBucket(bucketName);
+		else if(!isBucketCreationEnabled() && !s3Client.doesBucketExistV2(bucketName))
+			throw new SenderException(getLogPrefix() + " bucket with given name does not exist, please specify the name of an existing bucket OR"
+													 + " assign bucketCreationEnabled attribute to 'true' and create a new bucket with a unique name");
 	}
 
+	//when bucket 'does not exist' it throws an exception
+	public void checkBucketExistence(String bucketName) throws SenderException
+	{
+		if(!s3Client.doesBucketExistV2(bucketName))
+			throw new SenderException(getLogPrefix() + " bucket with given name does not exist, please specify the name of an existing bucket");
+	}
+	
+	//when object 'does not exist' it throws an exception
+	public void checkObjectExistence(String bucketName, String objectKey) throws SenderException
+	{
+		if(!s3Client.doesObjectExist(bucketName, objectKey))
+			throw new SenderException(getLogPrefix() + " object with given name does not exist, please specify the name of an existing object");
+	}
+	
+	
 	
 	//getters and setters
+	public List<String> getAvailableRegions()
+	{
+		//this method checks for available regions in AWS
+		List<String> availableRegions = new ArrayList<String>(Regions.values().length);
+		for (Regions region : Regions.values())
+		{
+			availableRegions.add(region.getName());
+			//System.out.println(region.getName());
+		}
+		
+		return availableRegions;
+	}
+	
 	public String getName()
 	{
 		return name;
@@ -372,6 +395,16 @@ public class S3Sender extends SenderWithParametersBase
 	public void setForceGlobalBucketAccessEnabled(boolean forceGlobalBucketAccessEnabled)
 	{
 		this.forceGlobalBucketAccessEnabled = forceGlobalBucketAccessEnabled;
+	}
+	
+	public boolean isBucketCreationEnabled()
+	{
+		return bucketCreationEnabled;
+	}
+
+	public void setBucketCreationEnabled(boolean bucketCreationEnabled)
+	{
+		this.bucketCreationEnabled = bucketCreationEnabled;
 	}
 
 	public String getClientRegion()
@@ -413,12 +446,4 @@ public class S3Sender extends SenderWithParametersBase
 	{
 		this.objectKey = objectKey;
 	}
-
-	/*
-	 * private String[] regions = {"us-gov-west-1", "us-east-1", "us-east-2",
-	 * "us-west-1", "us-west-2", "eu-west-1", "eu-west-2", "eu-west-3",
-	 * "eu-central-1", "ap-south-1", "ap-southeast-1", "ap-southeast-2",
-	 * "ap-northeast-1", "ap-northeast-2", "sa-east-1", "cn-north-1",
-	 * "cn-northwest-1", "ca-central-1"};
-	 */
 }
