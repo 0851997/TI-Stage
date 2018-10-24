@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.StringTokenizer;
 
 import org.apache.commons.lang.StringUtils;
 
@@ -47,6 +48,7 @@ import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectInputStream;
+import com.amazonaws.services.s3.internal.BucketNameUtils;
 
 import nl.nn.adapterframework.configuration.ConfigurationException;
 import nl.nn.adapterframework.core.ParameterException;
@@ -58,11 +60,12 @@ import nl.nn.adapterframework.parameters.ParameterResolutionContext;
 import nl.nn.adapterframework.parameters.ParameterValue;
 import nl.nn.adapterframework.parameters.ParameterValueList;
 import nl.nn.adapterframework.util.CredentialFactory;
+import nl.nn.adapterframework.util.Misc;
 
 /**
  * <p>
- * S3Sender, makes possible for Ibis developer to interact with Amazon Simple Storage Service (Amazon S3). It allows to create
- * and delete buckets. More so it makes possible for you to upload object(s) inside a bucket, delete object(s) from a bucket and 
+ * S3Sender, makes possible for Ibis developer to interact with Amazon Simple Storage Service (Amazon S3). It allows to make
+ * and remove buckets. More so it makes possible for you to upload object(s) inside a bucket, delete object(s) from a bucket and 
  * copy object(s) from one bucket too another.
  * </p>
  * 
@@ -74,20 +77,21 @@ import nl.nn.adapterframework.util.CredentialFactory;
  * <tr><td>{@link #setChunkedEncodingDisabled(boolean) chunkedEncodingDisabled}</td><td>Configures the client to disable chunked encoding for all requests.</td><td>false</td></tr>
  * <tr><td>{@link #setAccelerateModeEnabled(boolean) accelerateModeEnabled}</td><td>Configures the client to use S3 accelerate endpoint for all requests. A bucket by default cannot be accessed in accelerate mode. If you wish to do so, you need to enable the accelerate configuration for the bucket in advance. (This includes extra costs)</td><td>false</td></tr>
  * <tr><td>{@link #setForceGlobalBucketAccessEnabled(boolean) forceGlobalBucketAccessEnabled}</td><td>Configure whether global bucket access is enabled for this client. When enabled client in a specified region is allowed to create buckets in other regions.</td><td>false</td></tr>
- * <tr><td>{@link #setBucketCreationEnabled(boolean) bucketCreationEnabled}</td><td>When uploading an object to a non existent bucket, this attribute must be set to 'true' which allows the creation of the new bucket. Otherwise an exception will be thrown.</td><td>false</td></tr>
- * 
- * <tr>   <td>{@link #setAction(String) action}</td>   <td>Action to be performed. Possible action values:
- * <ul><li>createBucket: create a new bucket inside Amazon S3</li>
- * <li>deleteBucket: delete an existing bucket from S3</li>
- * <li>uploadObject: puts an object inside a S3 bucket</li>
- * <li>downloadObject: gets an object from a S3 bucket for further and safes it in ???</li>
- * <li>copyObject: copies an object from one S3 bucket to another S3 bucket</li>
- * <li>deleteObject: delete an object from inside a S3 bucket</li></ul>
- * </td>   <td></td>   </tr>
- * 
- * <tr><td>{@link #setClientRegion(String) clientRegion}</td><td>Set a region end point for creation of this client</td><td>"eu-central-1"</td></tr>
- * <tr><td>{@link #setBucketName(String) bucketName}</td><td>Set a new or an existing name for S3 bucket depending on your action</td><td></td></tr>
- * <tr><td>{@link #setObjectKey(String) objectKey}</td><td>Set a new or an existing name for your object depending on your action</td><td></td></tr>
+ * <tr><td>{@link #setBucketCreationEnabled(boolean) bucketCreationEnabled}</td><td>When uploading/copying an object to a non existent bucket, this attribute must be set to 'true' which allows the creation of the new bucket. Otherwise an exception will be thrown.</td><td>false</td></tr>
+ * <tr><td>{@link #setActions(String) actions}</td><td>Available actions are (These actions can be used together separated by a comma):
+ * <ul><li>mkBucket: create a new bucket inside Amazon S3</li>
+ * <li>rmBucket: delete an existing bucket from S3</li>
+ * <li>upload: puts an object inside a S3 bucket (file parameter required)</li>
+ * <li>download: gets an object from a S3 bucket for further and safes it in ???</li>
+ * <li>copy: copies an object from one S3 bucket to another S3 bucket (destinationBucketName and destinationObjectKey parameter required)</li>
+ * <li>delete: delete an object from inside a S3 bucket</li></ul></td><td></td></tr>
+ * <tr><td>{@link #setClientRegion(String) clientRegion}</td><td>Set a region end point for creation of this client. Available regions are: 
+ * <ul><li>us-gov-west-1, us-east-1, us-east-2, us-west-1, us-west-2</li>
+ * <li>eu-west-1, eu-west-2, eu-west-3, eu-central-1</li>
+ * <li>ap-south-1, ap-southeast-1, ap-southeast-2, ap-northeast-1, ap-northeast-2</li>
+ * <li>sa-east-1, cn-north-1, cn-northwest-1, ca-central-1</li></ul></td><td>"eu-central-1"</td></tr>
+ * <tr><td>{@link #setBucketName(String) bucketName}</td><td>Set a new or an existing name for S3 bucket depending on your actions</td><td></td></tr>
+ * <tr><td>{@link #setObjectKey(String) objectKey}</td><td>Set a new or an existing name for your object depending on your actions</td><td></td></tr>
  * </table>
  * </p>
  * 
@@ -95,8 +99,8 @@ import nl.nn.adapterframework.util.CredentialFactory;
  * <b>Parameters:</b>
  * <table border="1">
  * <tr><th>name</th><th>type</th><th>remarks</th></tr>
- * <tr><td>objectKey</td><td><i>String</i></td><td>When a parameter with name objectKey is present, it is used instead of the objectKey attribute</td></tr>
- * <tr><td>outputFile</td><td><i>Stream</i></td><td>This parameter contains InputStream, it must be present when performing uploadObject action </td></tr>
+ * <tr><td>objectKey</td><td><i>String</i></td><td>When a parameter with name objectKey is present, it is used instead of the message</td></tr>
+ * <tr><td>file</td><td><i>Stream</i></td><td>This parameter contains InputStream, it must be present when performing upload action</td></tr>
  * <tr><td>destinationBucketName</td><td><i>String</i></td><td>This parameter specifies the name of destination bucket, it must be present when performing copyObject action</td></tr>
  * <tr><td>destinationObjectKey</td><td><i>String</i></td><td>This parameter specifies the name of the copied object, it must be present when performing copyObject action</td></tr>
  * </table>
@@ -121,15 +125,14 @@ import nl.nn.adapterframework.util.CredentialFactory;
  * 
  * @author R. Karajev
  * @author Robert Karajev
- *
  */
 
 public class S3Sender extends SenderWithParametersBase
 {
 	private AmazonS3ClientBuilder s3ClientBuilder;
 	private AmazonS3 s3Client;
-	private List<String> regions = getAvailableRegions();
-	private List<String> actions = Arrays.asList("createBucket", "deleteBucket", "uploadObject", "downloadObject", "copyObject", "deleteObject");
+	private List<String> availableRegions = getAvailableRegions();
+	private List<String> availableActions = Arrays.asList("mkBucket", "rmBucket", "upload", "download", "copy", "delete");
 	
 	private String name;
 	private boolean chunkedEncodingDisabled = false;
@@ -137,9 +140,9 @@ public class S3Sender extends SenderWithParametersBase
 	private boolean forceGlobalBucketAccessEnabled = false;
 	private boolean bucketCreationEnabled = false;
 	private String clientRegion = Regions.EU_CENTRAL_1.getName();
-	private String action;
+	private String bucketRegion;
+	private String actions;
 	private String bucketName;
-	private String objectKey;
 
 
 	@Override
@@ -147,28 +150,31 @@ public class S3Sender extends SenderWithParametersBase
 	{
 		super.configure();
 		
-		if(getClientRegion() == null || !regions.contains(getClientRegion()))
-			throw new ConfigurationException(getLogPrefix() + " region unknown or is not specified [" + getClientRegion() + "] please use following supported regions: " + regions.toString());
+		if(getClientRegion() == null || !availableRegions.contains(getClientRegion()))
+			throw new ConfigurationException(getLogPrefix() + " region unknown or is not specified [" + getClientRegion() + "] please use following supported regions: " + availableRegions.toString());
 		
-		if(getAction() == null || !actions.contains(getAction()))
-			throw new ConfigurationException(getLogPrefix()+" action unknown or is not specified [" + getAction() + "} please use following supported actions: " + actions.toString());
-		
-		if(getBucketName() == null || !com.amazonaws.services.s3.internal.BucketNameUtils.isValidV2BucketName(getBucketName()))
-			throw new ConfigurationException(getLogPrefix() + " bucketName not specified or correct bucket naming is not used, visit AWS to see correct bucket naming");
-
-		ParameterList parameterList = getParameterList();
-		if(!(getAction().equals("createBucket") || getAction().equals("deleteBucket")))
+		StringTokenizer tokenizer = new StringTokenizer(getActions(), " ,\t\n\r\f");
+		while (tokenizer.hasMoreTokens()) 
 		{
-			if(getObjectKey() == null && parameterList.findParameter("objectKey") == null)
-				throw new ConfigurationException(getLogPrefix() + " minimal objectKey requirement not met, please specify objectKey or objectKey parameter");
+			String action = tokenizer.nextToken();
+
+	    	if(action == null || !availableActions.contains(action))
+				throw new ConfigurationException(getLogPrefix()+" action unknown or is not specified [" + action + "] please use following supported actions: " + availableActions.toString());	
 			
-			if(getAction().equals("uploadObject") && parameterList.findParameter("outputFile") == null)
-				throw new ConfigurationException(getLogPrefix()+" outputFile parameter requires to be present to perform [" + getAction() + "]");
-		
-			if(getAction().equals("copyObject") && parameterList.findParameter("destinationBucketName") == null)
-				throw new ConfigurationException(getLogPrefix()+" destinationBucketName parameter requires to be present to perform [" + getAction() + "] for copying an object to another bucket");
-		}
+			if(getBucketName() == null || !BucketNameUtils.isValidV2BucketName(getBucketName()))
+				throw new ConfigurationException(getLogPrefix() + " bucketName not specified or correct bucket naming is not used, visit AWS to see correct bucket naming");
+
+			ParameterList parameterList = getParameterList();
+			if(!(action.equalsIgnoreCase("mkBucket") || action.equalsIgnoreCase("rmBucket")))
+			{				
+				if(action.equalsIgnoreCase("upload") && parameterList.findParameter("file") == null)
+					throw new ConfigurationException(getLogPrefix()+" file parameter requires to be present to perform [" + action + "]");
 			
+				if(action.equalsIgnoreCase("copy") && parameterList.findParameter("destinationBucketName") == null && parameterList.findParameter("destinnationObjectKey") == null)
+					throw new ConfigurationException(getLogPrefix()+" destinationBucketName parameter requires to be present to perform [" + action + "] for copying an object to another bucket");
+			}
+	    }
+				
 		s3ClientBuilder = AmazonS3ClientBuilder.standard()
 											.withChunkedEncodingDisabled(isChunkedEncodingDisabled())
                             				.withAccelerateModeEnabled(isAccelerateModeEnabled())
@@ -202,59 +208,137 @@ public class S3Sender extends SenderWithParametersBase
 			throw new SenderException(getLogPrefix() + "Sender [" + getName() + "] caught exception evaluating parameters", e);
 		}
 		
-		if(getAction().equals("createBucket"))
-			createBucket(getBucketName());
-		else if(getAction().equals("deleteBucket"))
-			deleteBucket(getBucketName());
-		else if(getAction().equals("uploadObject"))
-			uploadObject(getBucketName(), getObjectKey(), pvl);
-		else if(getAction().equals("downloadObject"))
-			downloadObject(getBucketName(), getObjectKey());
-		else if(getAction().equals("copyObject"))
-			copyObject(getBucketName(), getObjectKey(), pvl);
-		else if(getAction().equals("deleteObject"))
-			deleteBucket(getBucketName());
+		StringTokenizer tokenizer = new StringTokenizer(getActions(), " ,\t\n\r\f");
+		while (tokenizer.hasMoreTokens()) 
+		{
+			String action = tokenizer.nextToken();
+			if(action.equalsIgnoreCase("mkBucket"))
+				createBucket(getBucketName());
+			else if(action.equalsIgnoreCase("rmBucket"))
+			{
+				deleteBucket(getBucketName());
+			}
+			else if(action.equalsIgnoreCase("upload"))
+			{
+				uploadObject(getBucketName(), message, pvl);
+			}
+			else if(action.equalsIgnoreCase("download"))
+			{
+				downloadObject(getBucketName(), message);
+			}
+			else if(action.equalsIgnoreCase("copy"))
+			{
+				checkBucketExistence(getBucketName());
+				checkObjectExistence(getBucketName(), message);
+				copyObject(getBucketName(), message, pvl);
+			}
+			else if(action.equalsIgnoreCase("delete"))
+			{
+				checkBucketExistence(getBucketName());
+				checkObjectExistence(getBucketName(), message);
+				deleteObject(getBucketName(), message);
+			}
+	    }
 		
 		return message;
 	}
 	
 	
-	//creates a bucket, if it does not already exist
+	//DONE! creates a bucket
 	public void createBucket(String bucketName) throws SenderException
 	{
-		if(!s3Client.doesBucketExistV2(bucketName))
+		if(!s3Client.doesBucketExistV2(getBucketName()))
 		{
-			CreateBucketRequest createBucketRequest = new CreateBucketRequest(bucketName);
-			s3Client.createBucket(createBucketRequest);			
+			CreateBucketRequest createBucketRequest = null;
+			if(isForceGlobalBucketAccessEnabled())
+				if(getBucketRegion() != null && availableRegions.contains(getBucketRegion()))
+					createBucketRequest = new CreateBucketRequest(bucketName, getBucketRegion());
+				else
+					throw new SenderException(getLogPrefix() + " bucketRegion is unknown or not specified [" + getBucketRegion() + "] please use one of the following supported bucketRegions: " + availableRegions.toString());
+			else
+				createBucketRequest = new CreateBucketRequest(bucketName);
+			
+			s3Client.createBucket(createBucketRequest);
+System.out.println("Bucket ["+bucketName+"] is created.");
 		}
 		else
-			throw new SenderException(getLogPrefix() + " bucket with bucketName: "+bucketName+" already exists, please specify a unique bucketName");
+			throw new SenderException(getLogPrefix() + " bucket with bucketName: "+getBucketName()+" already exists, please specify a unique bucketName");
+/*
+		//verschill in deze twee stukjes code
+		//#1
+		if(!availableRegions.contains(getBucketRegion()))
+			throw new SenderException(getLogPrefix() + " bucketRegion unknown [" + getBucketRegion() + "] please use following supported bucketRegions: " + availableRegions.toString());
+		createBucketRequest = new CreateBucketRequest(bucketName, getBucketRegion());
+		
+		//#2
+		if(availableRegions.contains(getBucketRegion()))
+			createBucketRequest = new CreateBucketRequest(bucketName, getBucketRegion());
+		else
+			throw new SenderException(getLogPrefix() + " bucketRegion unknown [" + getBucketRegion() + "] please use following supported bucketRegions: " + availableRegions.toString());
+*/	
 	}
 	
-	//this method deletes a bucket if one exists
+	//DONE! deletes a bucket
 	public void deleteBucket(String bucketName) throws SenderException
 	{
-		checkBucketExistence(bucketName);
+		checkBucketExistence(bucketName); //throws exception if bucket doesnt exist
 		DeleteBucketRequest deleteBucketRequest = new DeleteBucketRequest(bucketName);
 		s3Client.deleteBucket(deleteBucketRequest);
+System.out.println("Bucket ["+bucketName+"] is deleted.");
 	}
 	
-	//upload an InputStream to S3 Bucket as an object
+	//DONE! upload an InputStream to S3Bucket (as an object)
 	public void uploadObject(String bucketName, String objectKey, ParameterValueList pvl) throws SenderException
-	{
-		if (pvl.getParameterValue("outputFile") != null)
-		{	
-			bucketCreationForObjectAction(bucketName);
-			String tempObjectKey = pvl.getParameterValue("objectKey").asStringValue(objectKey);
-			InputStream inputStream = (InputStream) pvl.getParameterValue("outputFile").getValue();
-			ObjectMetadata metadata = new ObjectMetadata();
-			metadata.setContentType("application/octet-stream");
-			PutObjectRequest putObjectRequest = new PutObjectRequest(bucketName, tempObjectKey, inputStream, metadata);
-			s3Client.putObject(putObjectRequest);
-			System.out.println("Object uploaded into a S3 bucket!");				
+	{		
+		//TO-DO SambaSender upload methode algorithme voorbeeld toepassen!
+		try
+		{
+			bucketCreationForObjectAction(bucketName); //creates a bucket if bucketCreationEnabled assinged to 'true'			
+		}
+		catch(SenderException e)
+		{}
+		
+		String tempObjectKey = pvl.getParameterValue("objectKey").asStringValue(objectKey);
+		if(!tempObjectKey.isEmpty())
+		{
+			if(!s3Client.doesObjectExist(bucketName, tempObjectKey))
+			{
+				InputStream inputStream = null;
+				if(pvl.getParameterValue("file") != null)
+					if(pvl.getParameterValue("file").getValue() != null)
+						inputStream = (InputStream) pvl.getParameterValue("file").getValue();
+					else
+						throw new SenderException(getLogPrefix() + " no value was assinged for file parameter");
+				else
+					throw new SenderException(getLogPrefix() + " file parameter doesn't exist");
+				ObjectMetadata metadata = new ObjectMetadata();
+				metadata.setContentType("application/octet-stream");
+				
+				
+				PutObjectRequest putObjectRequest = new PutObjectRequest(bucketName, tempObjectKey, inputStream, metadata);
+				s3Client.putObject(putObjectRequest);
+				System.out.println("Object uploaded into a S3 bucket!: ["+bucketName+"]");			
+			}
+			else
+				throw new SenderException(getLogPrefix() + " object with given name already exists, please specify a new name for your object");			
 		}
 		else
-			throw new SenderException(getLogPrefix() + " outputFile parameter is not found in the ParameterValueList");
+			throw new SenderException(getLogPrefix() + " message doesn't cointain a name for the object");
+/*		
+		String tempObjectKey = null; 
+		if(pvl.getParameterValue("objectKey") != null)
+			if(pvl.getParameterValue("objectKey").getValue() != null)
+				tempObjectKey = pvl.getParameterValue("objectKey").getValue().toString();
+			else
+				throw new SenderException(getLogPrefix() + " no value was assigned for objectKey parameter");
+		else
+			if(!message.isEmpty())
+				tempObjectKey = message;
+			else
+				throw new SenderException(getLogPrefix() + " message doesn't cointain a name for the object");
+*/
+		
+		
 	}
 	
 	//get an object from S3 Bucket and 
@@ -262,8 +346,8 @@ public class S3Sender extends SenderWithParametersBase
 	{
 		try
 		{
-			checkBucketExistence(bucketName);
-			checkObjectExistence(bucketName, objectKey);
+			checkBucketExistence(getBucketName());
+			checkObjectExistence(getBucketName(), message);
 			GetObjectRequest getObjectRequest = new GetObjectRequest(bucketName, objectKey);
 			S3Object s3Object = s3Client.getObject(getObjectRequest);
 			
@@ -275,6 +359,7 @@ public class S3Sender extends SenderWithParametersBase
 	        {
 	            fileOutputStream.write(readBuffer, 0, readLength);
 	        }
+//	        Misc.streamToString(s3InputStream)
 	        
 	        s3InputStream.close();
 	        fileOutputStream.close();
@@ -287,44 +372,43 @@ public class S3Sender extends SenderWithParametersBase
 		{
 			e.printStackTrace();
 		}
-			
-		System.out.println("Object downloaded and all the streams closed!");
+System.out.println("Object downloaded and all the streams closed!");
 	}
 	
 	public void copyObject(String bucketName, String objectKey, ParameterValueList pvl) throws SenderException
 	{
-		if (pvl.getParameterValue("destinationBucketName") != null && pvl.getParameterValue("destinationObjectKey") != null)
+		if (pvl.getParameterValue("destinationBucketName") == null && pvl.getParameterValue("destinationObjectKey") == null)
+			throw new SenderException(getLogPrefix() + "possible that destinationBucketName or destinationObjectKey parameters are not found in the ParameterValueList");
+		
+		try
 		{
-			checkBucketExistence(bucketName);
-			checkObjectExistence(bucketName, objectKey);
 			String destinationBucketName = pvl.getParameterValue("destinationBucketName").getValue().toString();
 			String destinationObjectKey = pvl.getParameterValue("destinationObjectKey").getValue().toString();
 			bucketCreationForObjectAction(destinationBucketName);
 			CopyObjectRequest copyObjectRequest = new CopyObjectRequest(bucketName, objectKey, destinationBucketName, destinationObjectKey);
 			s3Client.copyObject(copyObjectRequest);
-			System.out.println("Object copied from one bucket to another");
+System.out.println("Object copied from bucket ["+bucketName+"] to bucket ["+destinationBucketName+"]");
 		}
-		else
-			throw new SenderException(getLogPrefix() + "possible that destinationBucketName or destinationObjectKey parameters are not found in the ParameterValueList");
+		catch(NullPointerException e)
+		{
+			throw new SenderException(getLogPrefix() + " no value found for destinationBucketName or destinationObjectKey parameter");
+		}
 	}
 	
 	public void deleteObject(String bucketName, String objectKey) throws SenderException
 	{
-		checkBucketExistence(bucketName);
-		checkObjectExistence(bucketName, objectKey);
 		DeleteObjectRequest deleteObjectRequest = new DeleteObjectRequest(bucketName, objectKey);
-		s3Client.deleteObject(deleteObjectRequest);	
+		s3Client.deleteObject(deleteObjectRequest);
+System.out.println("Object deleted from bucket: "+bucketName);	
 	}
-	
-	
-	
+
+
 	public void bucketCreationForObjectAction(String bucketName) throws SenderException
-	{
-		if(isBucketCreationEnabled() && !s3Client.doesBucketExistV2(bucketName))
+	{		
+		if(isBucketCreationEnabled())
 			createBucket(bucketName);
-		else if(!isBucketCreationEnabled() && !s3Client.doesBucketExistV2(bucketName))
-			throw new SenderException(getLogPrefix() + " bucket with given name does not exist, please specify the name of an existing bucket OR"
-													 + " assign bucketCreationEnabled attribute to 'true' and create a new bucket with a unique name");
+		else
+			throw new SenderException(getLogPrefix() + " failed to created a bucket, to create a bucket with a unique bucketName bucketCreationEnabled attribute must be assinged to 'true'");	
 	}
 
 	//when bucket 'does not exist' it throws an exception
@@ -340,8 +424,7 @@ public class S3Sender extends SenderWithParametersBase
 		if(!s3Client.doesObjectExist(bucketName, objectKey))
 			throw new SenderException(getLogPrefix() + " object with given name does not exist, please specify the name of an existing object");
 	}
-	
-	
+
 	
 	//getters and setters
 	public List<String> getAvailableRegions()
@@ -407,6 +490,7 @@ public class S3Sender extends SenderWithParametersBase
 		this.bucketCreationEnabled = bucketCreationEnabled;
 	}
 
+	
 	public String getClientRegion()
 	{
 		return clientRegion;
@@ -417,16 +501,26 @@ public class S3Sender extends SenderWithParametersBase
 		this.clientRegion = clientRegion;
 	}
 	
-	public String getAction()
+	public String getBucketRegion()
 	{
-		return action;
+		return bucketRegion;
 	}
 
-	public void setAction(String action)
+	public void setBucketRegion(String bucketRegion)
 	{
-		this.action = action;
+		this.bucketRegion = bucketRegion;
 	}
 
+	public String getActions()
+	{
+		return actions;
+	}
+	
+	public void setActions(String actions)
+	{
+		this.actions = actions;
+	}
+	
 	public String getBucketName()
 	{
 		return bucketName;
@@ -435,15 +529,5 @@ public class S3Sender extends SenderWithParametersBase
 	public void setBucketName(String bucketName)
 	{
 		this.bucketName = bucketName;
-	}
-	
-	public String getObjectKey()
-	{
-		return objectKey;
-	}
-
-	public void setObjectKey(String objectKey)
-	{
-		this.objectKey = objectKey;
 	}
 }

@@ -1,5 +1,6 @@
 <module>
-	<adapter name="TestAdapter" active="${TestAdapter.active}">
+	<adapter name="DemoAdapterPart1" active="${DemoAdapterPart1.active}">
+		
 		<receiver
 			name="Receiver"
 			className="nl.nn.adapterframework.receivers.GenericReceiver">
@@ -16,35 +17,40 @@
  			<pipe
 				name="saveFileName"
 				className="nl.nn.adapterframework.pipes.EchoPipe"
-				storeResultInSessionKey="mijnMooieNaam"
+				storeResultInSessionKey="fileName"
 				>
 			</pipe>
 
  			<pipe
 				name="FilePipe"
 				className="nl.nn.adapterframework.pipes.FilePipe"
-				directory="C:\Users\Robert\Desktop\"
+				directory="C:\Users\Robert\Desktop\test files\"
 				actions="read"
 				outputType="stream"
-				storeResultInSessionKey="mijnMooieFile"
+				storeResultInSessionKey="fileFromDesktop"
 				>
 			</pipe>
 
 			<pipe
-				name="SendingPipe"
+				name="S3SendingPipe"
 				getInputFromFixedValue="test"
 				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
-				<sender name="S3Sender"
+				<sender	name="S3Sender"
 						className="nl.nn.adapterframework.senders.S3Sender"
-						clientRegion="us-west-1"
-						bucketName="robert-test-bucket"
-						objectKey="OutputFromS3Sender">
-						<param name="file" sessionKey="mijnMooieFile" />
-						<param name="objectKey" sessionKey="mijnMooieNaam" />
-					</sender>
+						bucketCreationEnabled="true"
+						actions="mkBucket,upload,copy"
+						bucketName="robert-demo-bucket"
+						>
+						<param name="objectKey" sessionKey="fileName"/>
+						<param name="file" sessionKey="fileFromDesktop"/>
+						<param name="destinationBucketName" value="robert-demo-bucket-n2"/>
+						<param name="destinationObjcetKey" value="copiedObject"/>
+				</sender>
+				
    				<forward name="success" path="EXIT" />
-			</pipe>
+			</pipe>	
 			
-		</pipeline>	
+		</pipeline>
+			
 	</adapter>
 </module>
