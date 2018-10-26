@@ -1,5 +1,5 @@
 <module>
-	<adapter name="DemoAdapterPart1" active="${DemoAdapterPart1.active}">
+	<adapter name="DemoAdapterPart2" active="${DemoAdapterPart2.active}">
 		
 		<receiver
 			name="Receiver"
@@ -9,7 +9,7 @@
 				className="nl.nn.adapterframework.receivers.JavaListener"/>
 		</receiver>
 		
-		<pipeline firstPipe="FilePipe">
+		<pipeline firstPipe="S3SendingPipe">
 			<exits>
 				<exit path="EXIT" state="success"/>
 			</exits>
@@ -21,7 +21,7 @@
 				>
 			</pipe>
  -->
- 			<pipe
+ 			<!-- <pipe
 				name="FilePipe"
 				className="nl.nn.adapterframework.pipes.FilePipe"
 				directory="C:\Users\Robert\Desktop\test files\"
@@ -29,7 +29,7 @@
 				outputType="stream"
 				storeResultInSessionKey="fileFromDesktop"
 				>
-			</pipe>
+			</pipe> -->
 
 			<pipe
 				name="S3SendingPipe"
@@ -37,14 +37,10 @@
 				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
 				<sender	name="S3Sender"
 						className="nl.nn.adapterframework.senders.S3Sender"
-						bucketCreationEnabled="true"
-						actions="mkBucket,upload,copy"
+						actions="download,delete,rmBucket"
 						bucketName="robert-demo-bucket-n1"
 						>
 						<param name="objectKey" value="testfile.png"/>
-						<param name="file" sessionKey="fileFromDesktop"/>
-						<param name="destinationBucketName" value="robert-demo-bucket-n2"/>
-						<param name="destinationObjectKey" value="copiedObject.png"/>
 				</sender>
 				
    				<forward name="success" path="EXIT" />
