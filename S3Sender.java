@@ -209,19 +209,37 @@ public class S3Sender extends SenderWithParametersBase
 			else if(action.equalsIgnoreCase("rmBucket"))
 				deleteBucket(getBucketName());
 			else if(action.equalsIgnoreCase("upload"))
-				if(pvl.getParameterValue("file") != null)
-					if(pvl.getParameterValue("file").getValue() != null)
-						uploadObject(getBucketName(), generalObjectKey, pvl);
+				if(StringUtils.isNotEmpty(generalObjectKey))
+					if(pvl.getParameterValue("file") != null)
+						if(pvl.getParameterValue("file").getValue() != null)
+							uploadObject(getBucketName(), generalObjectKey, pvl);
+						else
+							throw new SenderException(getLogPrefix() + " no value was assinged for file parameter");
 					else
-						throw new SenderException(getLogPrefix() + " no value was assinged for file parameter");
+						throw new SenderException(getLogPrefix() + " file parameter doesn't exist, please use file parameter to perform [upload] action");
 				else
-					throw new SenderException(getLogPrefix() + " file parameter doesn't exist, please use file parameter to perform [upload] action");
+					throw new SenderException(getLogPrefix() + " no value found for the name of objectKey, please assing a value");
 			else if(action.equalsIgnoreCase("download"))
-				downloadObject(getBucketName(), generalObjectKey);
+				if(StringUtils.isNotEmpty(generalObjectKey))
+					downloadObject(getBucketName(), generalObjectKey);
+				else
+					throw new SenderException(getLogPrefix() + " no value found for the name of objectKey, please assing a value");
 			else if(action.equalsIgnoreCase("copy"))
-				copyObject(getBucketName(), generalObjectKey, pvl);
+				if(StringUtils.isNotEmpty(generalObjectKey))
+					if(pvl.getParameterValue("destinationBucketName") != null && pvl.getParameterValue("destinationObjectKey") != null)
+						if(pvl.getParameterValue("destinationBucketName").getValue() != null && pvl.getParameterValue("destinationObjectKey").getValue() != null)
+							copyObject(getBucketName(), generalObjectKey, pvl);
+						else
+							throw new SenderException(getLogPrefix() + " no value in destinationBucketName and/or destinationObjectKey parameter found, please assing values to the parameters to perfom [copy] action");
+					else
+						throw new SenderException(getLogPrefix() + " no destinationBucketName and/or destinationObjectKey parameter found, they must be used to perform [copy] action");
+				else
+					throw new SenderException(getLogPrefix() + " no value found for the name of objectKey, please assing a value");
 			else if(action.equalsIgnoreCase("delete"))
-				deleteObject(getBucketName(), generalObjectKey);
+				if(StringUtils.isNotEmpty(generalObjectKey))
+					deleteObject(getBucketName(), generalObjectKey);
+				else
+					throw new SenderException(getLogPrefix() + " no value found for the name of objectKey, please assing a value");
 	    }
 		
 		return message;
@@ -240,8 +258,7 @@ public class S3Sender extends SenderWithParametersBase
 				else
 					throw new SenderException(getLogPrefix() + " bucketRegion is unknown or not specified [" + getBucketRegion() + "] please use one of the following supported bucketRegions: " + availableRegions.toString());
 			else
-				createBucketRequest = new CreateBucketRequest(bucketName);
-			
+				createBucketRequest = new CreateBucketRequest(bucketName);			
 			s3Client.createBucket(createBucketRequest);
 System.out.println("Bucket ["+bucketName+"] is created.");
 		}
@@ -265,20 +282,17 @@ System.out.println("Bucket ["+bucketName+"] is deleted.");
 	{		
 		boolean bucketExistsThrowsException = false;
 		bucketCreationForObjectAction(bucketName, bucketExistsThrowsException);
-		if(StringUtils.isNotEmpty(objectKey))
-			if(!s3Client.doesObjectExist(bucketName, objectKey))
-			{//to-do remove all pvl operations inside function methods and do them in sendMessage (file as an object, will be given as parameter to uploadObject)
-						InputStream inputStream = (InputStream) pvl.getParameterValue("file").getValue();
-						ObjectMetadata metadata = new ObjectMetadata();
-						metadata.setContentType("application/octet-stream");	
-						PutObjectRequest putObjectRequest = new PutObjectRequest(bucketName, objectKey, inputStream, metadata);
-						s3Client.putObject(putObjectRequest);
+		if(!s3Client.doesObjectExist(bucketName, objectKey))
+		{
+			InputStream inputStream = (InputStream) pvl.getParameterValue("file").getValue();
+			ObjectMetadata metadata = new ObjectMetadata();
+			metadata.setContentType("application/octet-stream");	
+			PutObjectRequest putObjectRequest = new PutObjectRequest(bucketName, objectKey, inputStream, metadata);
+			s3Client.putObject(putObjectRequest);
 System.out.println("Object uploaded into a S3 bucket!: ["+bucketName+"]");
-			}
-			else
-				throw new SenderException(getLogPrefix() + " object with given name already exists, please specify a new name for your object");			
+		}
 		else
-			throw new SenderException(getLogPrefix() + " no value found for the name of an object, please assing a value");
+			throw new SenderException(getLogPrefix() + " object with given name already exists, please specify a new name for your object");			
 	}
 	
 	//DONE! gets an object from S3 bucket
@@ -318,39 +332,24 @@ System.out.println("Object downloaded and all the streams closed!");
 	public void copyObject(String bucketName, String objectKey, ParameterValueList pvl) throws SenderException
 	{
 		checkBucketAbsence(bucketName);
-		if(StringUtils.isNotEmpty(objectKey))
+		checkObjectAbsence(bucketName, objectKey);
+		String destinationBucketName = pvl.getParameterValue("destinationBucketName").getValue().toString();
+		String destinationObjectKey = pvl.getParameterValue("destinationObjectKey").getValue().toString();				
+		if(BucketNameUtils.isValidV2BucketName(destinationBucketName))
 		{
-			checkObjectAbsence(bucketName, objectKey);
-			if(pvl.getParameterValue("destinationBucketName") != null && pvl.getParameterValue("destinationObjectKey") != null)
+			boolean bucketExistsThrowsException = false;
+			bucketCreationForObjectAction(destinationBucketName, bucketExistsThrowsException);
+			if(!s3Client.doesObjectExist(destinationBucketName, destinationObjectKey))
 			{
-				if(pvl.getParameterValue("destinationBucketName").getValue() != null && pvl.getParameterValue("destinationObjectKey").getValue() != null)
-				{
-					String destinationBucketName = pvl.getParameterValue("destinationBucketName").getValue().toString();
-					String destinationObjectKey = pvl.getParameterValue("destinationObjectKey").getValue().toString();				
-					if(BucketNameUtils.isValidV2BucketName(destinationBucketName))
-					{
-						boolean bucketExistsThrowsException = false;
-						bucketCreationForObjectAction(destinationBucketName, bucketExistsThrowsException);
-						if(!s3Client.doesObjectExist(destinationBucketName, destinationObjectKey))
-						{
-							CopyObjectRequest copyObjectRequest = new CopyObjectRequest(bucketName, objectKey, destinationBucketName, destinationObjectKey);
-							s3Client.copyObject(copyObjectRequest);			
+				CopyObjectRequest copyObjectRequest = new CopyObjectRequest(bucketName, objectKey, destinationBucketName, destinationObjectKey);
+				s3Client.copyObject(copyObjectRequest);			
 System.out.println("Object copied from bucket ["+bucketName+"] to bucket ["+destinationBucketName+"]");
-						}
-						else
-							throw new SenderException(getLogPrefix() + " object with given name already exists, please specify a new name");
-					}
-					else
-						throw new SenderException(getLogPrefix() + " failed to create bucket, correct bucket naming is not used for destinationBucketName parameter, visit AWS to see correct bucket naming");
-				}
-				else
-					throw new SenderException(getLogPrefix() + " no value in destinationBucketName and/or destinationObjectKey parameter found, please assing values to the parameters to perfom [copy] action");
 			}
 			else
-				throw new SenderException(getLogPrefix() + " no destinationBucketName and/or destinationObjectKey parameter found, they must be used to perform [copy] action");
+				throw new SenderException(getLogPrefix() + " object with given name already exists, please specify a new name");
 		}
 		else
-			throw new SenderException(getLogPrefix() + " objectKey parameter and incomming message don't have values, one must have a value for the name of an object");
+			throw new SenderException(getLogPrefix() + " failed to create bucket, correct bucket naming is not used for destinationBucketName parameter, visit AWS to see correct bucket naming");
 	}
 	
 	//DONE! deletes an object from S3 bucket
