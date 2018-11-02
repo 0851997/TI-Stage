@@ -74,7 +74,7 @@ import nl.nn.adapterframework.util.Misc;
  * <li>download: gets an object from a S3 bucket for further and safes it in ???</li>
  * <li>copy: copies an object from one S3 bucket to another S3 bucket (destinationBucketName and destinationObjectKey parameter required)</li>
  * <li>delete: delete an object from inside a S3 bucket</li></ul></td><td></td></tr>
- * <tr><td>{@link #setClientRegion(String) clientRegion}</td><td>Set a region end point for creation of this client. Available regions are: 
+ * <tr><td>{@link #setClientRegion(String) clientRegion}</td><td>Set a region endpoint for this client to work with. Available regions are: 
  * <ul><li>us-gov-west-1, us-east-1, us-east-2, us-west-1, us-west-2</li>
  * <li>eu-west-1, eu-west-2, eu-west-3, eu-central-1</li>
  * <li>ap-south-1, ap-southeast-1, ap-southeast-2, ap-northeast-1, ap-northeast-2</li>
@@ -120,9 +120,11 @@ public class S3Sender extends SenderWithParametersBase
 {
 	private AmazonS3ClientBuilder s3ClientBuilder;
 	private AmazonS3 s3Client;
-	private List<String> availableRegions = getAvailableRegions();
+	//changed to static as it can be used from differnect classes
+	private static List<String> availableRegions = getAvailableRegions();
 	private List<String> availableActions = Arrays.asList("mkBucket", "rmBucket", "upload", "download", "copy", "delete");
 	
+	//this doesnt have to be used senderbase already has this field*
 	private String name;
 	private boolean chunkedEncodingDisabled = false;
 	private boolean accelerateModeEnabled = false; // this may involve some extra costs
@@ -172,6 +174,7 @@ public class S3Sender extends SenderWithParametersBase
 		
 	}
 
+	//override???
 	public void open()
 	{
 		s3Client = s3ClientBuilder.build();
@@ -387,7 +390,7 @@ System.out.println("Object deleted from bucket: "+bucketName);
 
 	
 	//getters and setters
-	public List<String> getAvailableRegions()
+	public static List<String> getAvailableRegions()
 	{
 		//this method checks for available regions in AWS
 		List<String> availableRegions = new ArrayList<String>(Regions.values().length);
