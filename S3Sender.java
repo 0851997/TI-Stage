@@ -21,16 +21,20 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.StringTokenizer;
 
 import org.apache.commons.lang.StringUtils;
 
+import com.amazonaws.AmazonServiceException;
+import com.amazonaws.SdkClientException;
 import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.internal.BucketNameUtils;
+import com.amazonaws.services.s3.model.BucketNotificationConfiguration;
 import com.amazonaws.services.s3.model.CopyObjectRequest;
 import com.amazonaws.services.s3.model.CreateBucketRequest;
 import com.amazonaws.services.s3.model.DeleteBucketRequest;
@@ -38,8 +42,11 @@ import com.amazonaws.services.s3.model.DeleteObjectRequest;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.S3Event;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectInputStream;
+import com.amazonaws.services.s3.model.SetBucketNotificationConfigurationRequest;
+import com.amazonaws.services.s3.model.TopicConfiguration;
 
 import nl.nn.adapterframework.configuration.ConfigurationException;
 import nl.nn.adapterframework.core.ParameterException;
@@ -120,6 +127,7 @@ public class S3Sender extends SenderWithParametersBase
 {
 	private AmazonS3ClientBuilder s3ClientBuilder;
 	private AmazonS3 s3Client;
+	
 	//changed to static as it can be used from differnect classes
 	private static List<String> availableRegions = getAvailableRegions();
 	private List<String> availableActions = Arrays.asList("mkBucket", "rmBucket", "upload", "download", "copy", "delete");
@@ -130,6 +138,7 @@ public class S3Sender extends SenderWithParametersBase
 	private boolean accelerateModeEnabled = false; // this may involve some extra costs
 	private boolean forceGlobalBucketAccessEnabled = false;
 	private boolean bucketCreationEnabled = false;
+	private boolean bucketNotificationEnabled = true;
 	private String clientRegion = Regions.EU_CENTRAL_1.getName();
 	private String bucketRegion;
 	private String actions;
@@ -171,7 +180,6 @@ public class S3Sender extends SenderWithParametersBase
                             				.withForceGlobalBucketAccessEnabled(isForceGlobalBucketAccessEnabled())
                             				.withRegion(getClientRegion())
                             				.withCredentials(new EnvironmentVariableCredentialsProvider());
-		
 	}
 
 	//override???
@@ -205,10 +213,7 @@ public class S3Sender extends SenderWithParametersBase
 		{
 			String action = tokenizer.nextToken();
 			if(action.equalsIgnoreCase("mkBucket"))
-			{
-				boolean bucketExistsThrowsException = true;
-				createBucket(getBucketName(), bucketExistsThrowsException);
-			}
+				createBucket(getBucketName(), true);
 			else if(action.equalsIgnoreCase("rmBucket"))
 				deleteBucket(getBucketName());
 			else if(action.equalsIgnoreCase("upload"))
@@ -262,8 +267,11 @@ public class S3Sender extends SenderWithParametersBase
 					throw new SenderException(getLogPrefix() + " bucketRegion is unknown or not specified [" + getBucketRegion() + "] please use one of the following supported bucketRegions: " + availableRegions.toString());
 			else
 				createBucketRequest = new CreateBucketRequest(bucketName);			
+			
 			s3Client.createBucket(createBucketRequest);
 System.out.println("Bucket ["+bucketName+"] is created.");
+			if(isBucketNotificationEnabled())
+				setBucketNotificationConfiguration(bucketName);
 		}
 		else
 			if(bucketExistsThrowsException)
@@ -387,6 +395,28 @@ System.out.println("Object deleted from bucket: "+bucketName);
 		if(!s3Client.doesObjectExist(bucketName, objectKey))
 			throw new SenderException(getLogPrefix() + " object with given name does not exist, please specify the name of an existing object");
 	}
+	
+	public void setBucketNotificationConfiguration(String bucketName)
+	{
+		try 
+		{
+			BucketNotificationConfiguration notificationConfiguration = new BucketNotificationConfiguration();
+			notificationConfiguration.addConfiguration("snsTopicObjectCreatedConfig", new TopicConfiguration("arn:aws:sns:eu-west-2:025885598068:S3-Operation-Notifications", EnumSet.of(S3Event.ObjectCreated)));
+			notificationConfiguration.addConfiguration("snsTopicObjectRemovedConfig", new TopicConfiguration("arn:aws:sns:eu-west-2:025885598068:S3-Operation-Notifications", EnumSet.of(S3Event.ObjectRemoved)));
+			SetBucketNotificationConfigurationRequest request = new SetBucketNotificationConfigurationRequest(bucketName, notificationConfiguration);
+			s3Client.setBucketNotificationConfiguration(request);
+		}
+		catch(AmazonServiceException e) {
+            // The call was transmitted successfully, but Amazon S3 couldn't process 
+            // it, so it returned an error response.
+            e.printStackTrace();
+        }
+        catch(SdkClientException e) {
+            // Amazon S3 couldn't be contacted for a response, or the client
+            // couldn't parse the response from Amazon S3.
+            e.printStackTrace();
+        }
+	}
 
 	
 	//getters and setters
@@ -452,8 +482,17 @@ System.out.println("Object deleted from bucket: "+bucketName);
 	{
 		this.bucketCreationEnabled = bucketCreationEnabled;
 	}
-
 	
+	public boolean isBucketNotificationEnabled()
+	{
+		return bucketNotificationEnabled;
+	}
+
+	public void setBucketNotificationEnabled(boolean bucketNotificationEnabled)
+	{
+		this.bucketNotificationEnabled = bucketNotificationEnabled;
+	}
+
 	public String getClientRegion()
 	{
 		return clientRegion;
