@@ -42,6 +42,7 @@ import com.amazonaws.services.s3.model.DeleteObjectRequest;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.QueueConfiguration;
 import com.amazonaws.services.s3.model.S3Event;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectInputStream;
@@ -197,19 +198,22 @@ public class S3Sender extends SenderWithParametersBase
 	{
 		//fills ParameterValueList pvl with the set parameters from S3Sender
 		ParameterValueList pvl = null;
+		String generalObjectKey = null;
 		try
 		{
 			if (prc != null && paramList != null)
 				pvl = prc.getValues(paramList);
+			generalObjectKey = pvl.getParameterValue("objectKey").asStringValue(message);
 		} 
 		catch (ParameterException e)
 		{
 			throw new SenderException(getLogPrefix() + "Sender [" + getName() + "] caught exception evaluating parameters", e);
 		}
+		catch (NullPointerException e)
+		{}
 		
-		String generalObjectKey = pvl.getParameterValue("objectKey").asStringValue(message);
 		StringTokenizer tokenizer = new StringTokenizer(getActions(), " ,\t\n\r\f");
-		while (tokenizer.hasMoreTokens()) 
+		while (tokenizer.hasMoreTokens())
 		{
 			String action = tokenizer.nextToken();
 			if(action.equalsIgnoreCase("mkBucket"))
@@ -401,8 +405,8 @@ System.out.println("Object deleted from bucket: "+bucketName);
 		try 
 		{
 			BucketNotificationConfiguration notificationConfiguration = new BucketNotificationConfiguration();
-			notificationConfiguration.addConfiguration("snsTopicObjectCreatedConfig", new TopicConfiguration("arn:aws:sns:eu-west-2:025885598068:S3-Operation-Notifications", EnumSet.of(S3Event.ObjectCreated)));
-			notificationConfiguration.addConfiguration("snsTopicObjectRemovedConfig", new TopicConfiguration("arn:aws:sns:eu-west-2:025885598068:S3-Operation-Notifications", EnumSet.of(S3Event.ObjectRemoved)));
+			notificationConfiguration.addConfiguration("sqsQueueObjectCreatedConfig", new QueueConfiguration("arn:aws:sqs:eu-central-1:025885598068:S3NotificationsQueue", EnumSet.of(S3Event.ObjectCreated)));
+			notificationConfiguration.addConfiguration("sqsQueueObjectRemovedConfig", new QueueConfiguration("arn:aws:sqs:eu-central-1:025885598068:S3NotificationsQueue", EnumSet.of(S3Event.ObjectRemoved)));
 			SetBucketNotificationConfigurationRequest request = new SetBucketNotificationConfigurationRequest(bucketName, notificationConfiguration);
 			s3Client.setBucketNotificationConfiguration(request);
 		}
