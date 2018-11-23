@@ -75,6 +75,7 @@ import nl.nn.adapterframework.util.Misc;
  * <tr><td>{@link #setAccelerateModeEnabled(boolean) accelerateModeEnabled}</td><td>Configures the client to use S3 accelerate endpoint for all requests. A bucket by default cannot be accessed in accelerate mode. If you wish to do so, you need to enable the accelerate configuration for the bucket in advance. (This includes extra costs)</td><td>false</td></tr>
  * <tr><td>{@link #setForceGlobalBucketAccessEnabled(boolean) forceGlobalBucketAccessEnabled}</td><td>Configure whether global bucket access is enabled for this client. When enabled client in a specified region is allowed to create buckets in other regions.</td><td>false</td></tr>
  * <tr><td>{@link #setBucketCreationEnabled(boolean) bucketCreationEnabled}</td><td>When uploading/copying an object to a non existent bucket, this attribute must be set to 'true' which allows the creation of the new bucket. Otherwise an exception will be thrown.</td><td>false</td></tr>
+ * <tr><td>{@link #setBucketNotificationEnabled(boolean) bucketNotificationEnabled}</td><td>Configure whether events within created bucket trigger notifications and send it to SQS queue for SQSListener</td><td></td>true</tr>
  * <tr><td>{@link #setActions(String) actions}</td><td>Available actions are (separated by comma actions can be used together, actions can only be performed on one bucket and object):
  * <ul><li>mkBucket: create a new bucket inside Amazon S3</li>
  * <li>rmBucket: delete an existing bucket from S3</li>
@@ -129,8 +130,8 @@ public class S3Sender extends SenderWithParametersBase
 	private AmazonS3ClientBuilder s3ClientBuilder;
 	private AmazonS3 s3Client;
 	
-	//changed to static as it can be used from differnect classes
-	private static List<String> availableRegions = getAvailableRegions();
+	//changed to static and final as it can be used from different classes and should not be changed
+	private static final List<String> AVAILABLE_REGIONS = getAvailableRegions();
 	private List<String> availableActions = Arrays.asList("mkBucket", "rmBucket", "upload", "download", "copy", "delete");
 	
 	//this doesnt have to be used senderbase already has this field*
@@ -150,20 +151,20 @@ public class S3Sender extends SenderWithParametersBase
 	public void configure() throws ConfigurationException
 	{
 		super.configure();
-		if(StringUtils.isEmpty(getClientRegion()) || !availableRegions.contains(getClientRegion()))
-			throw new ConfigurationException(getLogPrefix() + " region unknown or is not specified [" + getClientRegion() + "] please use following supported regions: " + availableRegions.toString());
+		if(StringUtils.isEmpty(getClientRegion()) || !AVAILABLE_REGIONS.contains(getClientRegion()))
+			throw new ConfigurationException(getLogPrefix() + " region unknown or is not specified [" + getClientRegion() + "] please use following supported regions: " + AVAILABLE_REGIONS.toString());
+		
+		if(StringUtils.isEmpty(getBucketName()) || !BucketNameUtils.isValidV2BucketName(getBucketName()))
+			throw new ConfigurationException(getLogPrefix() + " bucketName not specified or correct bucket naming is not used, visit AWS to see correct bucket naming");
 		
 		StringTokenizer tokenizer = new StringTokenizer(getActions(), " ,\t\n\r\f");
 		while (tokenizer.hasMoreTokens()) 
 		{
 			String action = tokenizer.nextToken();
 
-	    	if(StringUtils.isEmpty(action) || !availableActions.contains(action))
+			if(StringUtils.isEmpty(action) || !availableActions.contains(action))
 				throw new ConfigurationException(getLogPrefix()+" action unknown or is not specified [" + action + "] please use following supported actions: " + availableActions.toString());	
 			
-			if(StringUtils.isEmpty(getBucketName()) || !BucketNameUtils.isValidV2BucketName(getBucketName()))
-				throw new ConfigurationException(getLogPrefix() + " bucketName not specified or correct bucket naming is not used, visit AWS to see correct bucket naming");
-
 			ParameterList parameterList = getParameterList();
 			if(!(action.equalsIgnoreCase("mkBucket") || action.equalsIgnoreCase("rmBucket")))
 			{				
@@ -203,8 +204,8 @@ public class S3Sender extends SenderWithParametersBase
 		{
 			if (prc != null && paramList != null)
 				pvl = prc.getValues(paramList);
-			generalObjectKey = pvl.getParameterValue("objectKey").asStringValue(message);
-		} 
+			generalObjectKey = pvl.getParameterValue("objectKey").asStringValue(message);		//TODO this need to be fixed! When objectKey parameter not assigned generalObjectKey is null somehow, how?
+		}
 		catch (ParameterException e)
 		{
 			throw new SenderException(getLogPrefix() + "Sender [" + getName() + "] caught exception evaluating parameters", e);
@@ -216,42 +217,37 @@ public class S3Sender extends SenderWithParametersBase
 		while (tokenizer.hasMoreTokens())
 		{
 			String action = tokenizer.nextToken();
+//System.out.println("generalObjectKey: "+generalObjectKey);
+//System.out.println("message: "+message);
+			if(action.equalsIgnoreCase("upload") || action.equalsIgnoreCase("download") || action.equalsIgnoreCase("copy") || action.equalsIgnoreCase("delete"))
+				if(StringUtils.isEmpty(generalObjectKey))
+					throw new SenderException(getLogPrefix() + " no value found for the objectKey, please assing a value");
+			
 			if(action.equalsIgnoreCase("mkBucket"))
+				//'true' this can be used as global variable and used with !
 				createBucket(getBucketName(), true);
 			else if(action.equalsIgnoreCase("rmBucket"))
 				deleteBucket(getBucketName());
 			else if(action.equalsIgnoreCase("upload"))
-				if(StringUtils.isNotEmpty(generalObjectKey))
-					if(pvl.getParameterValue("file") != null)
-						if(pvl.getParameterValue("file").getValue() != null)
-							uploadObject(getBucketName(), generalObjectKey, pvl);
-						else
-							throw new SenderException(getLogPrefix() + " no value was assinged for file parameter");
+				if(pvl.getParameterValue("file") != null)
+					if(pvl.getParameterValue("file").getValue() != null)
+						uploadObject(getBucketName(), generalObjectKey, pvl);
 					else
-						throw new SenderException(getLogPrefix() + " file parameter doesn't exist, please use file parameter to perform [upload] action");
+						throw new SenderException(getLogPrefix() + " no value was assinged for file parameter");
 				else
-					throw new SenderException(getLogPrefix() + " no value found for the name of objectKey, please assing a value");
+					throw new SenderException(getLogPrefix() + " file parameter doesn't exist, please use file parameter to perform [upload] action");
 			else if(action.equalsIgnoreCase("download"))
-				if(StringUtils.isNotEmpty(generalObjectKey))
-					downloadObject(getBucketName(), generalObjectKey);
-				else
-					throw new SenderException(getLogPrefix() + " no value found for the name of objectKey, please assing a value");
+				downloadObject(getBucketName(), generalObjectKey);
 			else if(action.equalsIgnoreCase("copy"))
-				if(StringUtils.isNotEmpty(generalObjectKey))
-					if(pvl.getParameterValue("destinationBucketName") != null && pvl.getParameterValue("destinationObjectKey") != null)
-						if(pvl.getParameterValue("destinationBucketName").getValue() != null && pvl.getParameterValue("destinationObjectKey").getValue() != null)
-							copyObject(getBucketName(), generalObjectKey, pvl);
-						else
-							throw new SenderException(getLogPrefix() + " no value in destinationBucketName and/or destinationObjectKey parameter found, please assing values to the parameters to perfom [copy] action");
+				if(pvl.getParameterValue("destinationBucketName") != null && pvl.getParameterValue("destinationObjectKey") != null)
+					if(pvl.getParameterValue("destinationBucketName").getValue() != null && pvl.getParameterValue("destinationObjectKey").getValue() != null)
+						copyObject(getBucketName(), generalObjectKey, pvl);
 					else
-						throw new SenderException(getLogPrefix() + " no destinationBucketName and/or destinationObjectKey parameter found, they must be used to perform [copy] action");
+						throw new SenderException(getLogPrefix() + " no value in destinationBucketName and/or destinationObjectKey parameter found, please assing values to the parameters to perfom [copy] action");
 				else
-					throw new SenderException(getLogPrefix() + " no value found for the name of objectKey, please assing a value");
+					throw new SenderException(getLogPrefix() + " no destinationBucketName and/or destinationObjectKey parameter found, they must be used to perform [copy] action");
 			else if(action.equalsIgnoreCase("delete"))
-				if(StringUtils.isNotEmpty(generalObjectKey))
 					deleteObject(getBucketName(), generalObjectKey);
-				else
-					throw new SenderException(getLogPrefix() + " no value found for the name of objectKey, please assing a value");
 	    }
 		
 		return message;
@@ -265,13 +261,12 @@ public class S3Sender extends SenderWithParametersBase
 		{
 			CreateBucketRequest createBucketRequest = null;
 			if(isForceGlobalBucketAccessEnabled())
-				if(StringUtils.isNotEmpty(getBucketRegion()) && availableRegions.contains(getBucketRegion()))
+				if(StringUtils.isNotEmpty(getBucketRegion()) && AVAILABLE_REGIONS.contains(getBucketRegion()))
 					createBucketRequest = new CreateBucketRequest(bucketName, getBucketRegion());
 				else
-					throw new SenderException(getLogPrefix() + " bucketRegion is unknown or not specified [" + getBucketRegion() + "] please use one of the following supported bucketRegions: " + availableRegions.toString());
+					throw new SenderException(getLogPrefix() + " bucketRegion is unknown or not specified [" + getBucketRegion() + "] please use one of the following supported bucketRegions: " + AVAILABLE_REGIONS.toString());
 			else
 				createBucketRequest = new CreateBucketRequest(bucketName);			
-			
 			s3Client.createBucket(createBucketRequest);
 System.out.println("Bucket ["+bucketName+"] is created.");
 			if(isBucketNotificationEnabled())
