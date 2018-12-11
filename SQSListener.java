@@ -15,9 +15,16 @@
 */
 package nl.nn.adapterframework.receivers;
 
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 
+import com.amazonaws.AmazonServiceException;
+import com.amazonaws.SdkClientException;
+import com.amazonaws.services.s3.model.BucketNotificationConfiguration;
+import com.amazonaws.services.s3.model.QueueConfiguration;
+import com.amazonaws.services.s3.model.S3Event;
+import com.amazonaws.services.s3.model.SetBucketNotificationConfigurationRequest;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 
@@ -34,19 +41,20 @@ public class SQSListener extends SQSFacade implements IPullingListener
 	public void configure() throws ConfigurationException
 	{
 		super.configure();
+System.out.println("congfiguring");
 	}
 
 	@Override
 	public void open() throws ListenerException
 	{
 		super.open();
-		
+System.out.println("open method: starting everything");
 	}
 
 	@Override
 	public Map<String, Object> openThread() throws ListenerException
 	{
-		// TODO Auto-generated method stub
+System.out.println("open thread method");
 		return null;
 	}
 
@@ -54,21 +62,21 @@ public class SQSListener extends SQSFacade implements IPullingListener
 	public void close() throws ListenerException
 	{
 		super.close();
-		
+System.out.println("close methode: stops everything before exiting");
 	}
 
 	@Override
 	public void closeThread(Map<String, Object> threadContext) throws ListenerException
 	{
-		// TODO Auto-generated method stub
-		
+System.out.println("close thread method");
 	}
 
 	@Override
-	public Object getRawMessage(Map<String, Object> threadContext) throws ListenerException
+	public synchronized Object getRawMessage(Map<String, Object> threadContext) throws ListenerException
 	{
-		ReceiveMessageRequest receiveMessageRequest = new ReceiveMessageRequest("https://sqs.eu-central-1.amazonaws.com/025885598068/S3NotificationsQueue").withMaxNumberOfMessages(1).withWaitTimeSeconds(30);
+		ReceiveMessageRequest receiveMessageRequest = new ReceiveMessageRequest("https://sqs.eu-west-1.amazonaws.com/025885598068/S3NotificationQueue.fifo").withMaxNumberOfMessages(1);
 		final List<Message> message = getSqsClient().receiveMessage(receiveMessageRequest).getMessages();
+System.out.println("messages: "+message);
 		
 		return message;
 	}
@@ -76,6 +84,7 @@ public class SQSListener extends SQSFacade implements IPullingListener
 	@Override
 	public String getIdFromRawMessage(Object rawMessage, Map<String, Object> context) throws ListenerException
 	{
+System.out.println("getIdFromRawMessage method");
 		// TODO Auto-generated method stub
 		return null;
 	}
@@ -83,6 +92,7 @@ public class SQSListener extends SQSFacade implements IPullingListener
 	@Override
 	public String getStringFromRawMessage(Object rawMessage, Map<String, Object> context) throws ListenerException
 	{
+System.out.println("getStringFromRawMessage");
 		// TODO Auto-generated method stub
 		return null;
 	}
@@ -91,8 +101,33 @@ public class SQSListener extends SQSFacade implements IPullingListener
 	public void afterMessageProcessed(PipeLineResult processResult, Object rawMessage, Map<String, Object> context)
 			throws ListenerException
 	{
+		System.out.println("afterMessageProcessed");
 		// TODO Auto-generated method stub
 		
+	}
+
+	//temp method for SQSSender
+	public void setBucketNotificationConfiguration(String bucketName)
+	{
+		try 
+		{
+			BucketNotificationConfiguration notificationConfiguration = new BucketNotificationConfiguration();
+			notificationConfiguration.addConfiguration("sqsQueueObjectCreatedConfig", new QueueConfiguration("arn:aws:sqs:eu-west-1:025885598068:S3NotificationQueue.fifo", EnumSet.of(S3Event.ObjectCreated)));
+			notificationConfiguration.addConfiguration("sqsQueueObjectRemovedConfig", new QueueConfiguration("arn:aws:sqs:eu-west-1:025885598068:S3NotificationQueue.fifo", EnumSet.of(S3Event.ObjectRemoved)));
+			SetBucketNotificationConfigurationRequest request = new SetBucketNotificationConfigurationRequest(bucketName, notificationConfiguration);
+			System.out.println(bucketName+", "+notificationConfiguration.getConfigurations().toString());
+			//s3Client.setBucketNotificationConfiguration(request);
+		}
+		catch(AmazonServiceException e) {
+            // The call was transmitted successfully, but Amazon S3 couldn't process 
+            // it, so it returned an error response.
+            e.printStackTrace();
+        }
+        catch(SdkClientException e) {
+            // Amazon S3 couldn't be contacted for a response, or the client
+            // couldn't parse the response from Amazon S3.
+            e.printStackTrace();
+        }
 	}
 
 	
