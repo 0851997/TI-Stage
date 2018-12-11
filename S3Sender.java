@@ -236,17 +236,17 @@ public class S3Sender extends SenderWithParametersBase
 				else
 					throw new SenderException(getLogPrefix() + " file parameter doesn't exist, please use file parameter to perform [upload] action");
 			else if(action.equalsIgnoreCase("download"))											//download file block
-				downloadObject(getBucketName(), generalFileName, prc, pvl);
+				result = downloadObject(getBucketName(), generalFileName, prc);
 			else if(action.equalsIgnoreCase("copy"))												//copy file block
 				if(pvl.getParameterValue("destinationBucketName") != null && pvl.getParameterValue("destinationFileName") != null)
 					if(pvl.getParameterValue("destinationBucketName").getValue() != null && pvl.getParameterValue("destinationFileName").getValue() != null)
-						copyObject(getBucketName(), generalFileName, pvl);
+						result = copyObject(getBucketName(), generalFileName, pvl);
 					else
 						throw new SenderException(getLogPrefix() + " no value in destinationBucketName and/or destinationFileName parameter found, please assing values to the parameters to perfom [copy] action");
 				else
 					throw new SenderException(getLogPrefix() + " no destinationBucketName and/or destinationFileName parameter found, they must be used to perform [copy] action");
 			else if(action.equalsIgnoreCase("delete"))												//delete file block
-					deleteObject(getBucketName(), generalFileName);
+					result = deleteObject(getBucketName(), generalFileName);
 	    }
 		
 		System.out.println("Return message: "+result);
@@ -323,39 +323,18 @@ public class S3Sender extends SenderWithParametersBase
 	}
 	
 	//DONE! gets an file from S3 bucket
-	private String downloadObject(String bucketName, String fileName, ParameterResolutionContext prc, ParameterValueList pvl) throws SenderException
+	private String downloadObject(String bucketName, String fileName, ParameterResolutionContext prc) throws SenderException
 	{
-		try 
-		{
-			IPipeLineSession session=null;
-			if (prc!=null)
-				session=prc.getSession();
-			pvl.;
-			
-		}
-		catch(SenderException e) 
-		{
-			throw e;
-		} 
-		catch(Exception e) 
-		{
-			throw new SenderException("Error during ftp-ing " + message, e);
-		}
-		
-		S3ObjectInputStream fileInputStream = null;
+		String key = "s3InputStreamKey";
+		S3ObjectInputStream s3InputStream = null;
 		try
 		{
 			bucketDoesNotExist(bucketName);
 			fileDoesNotExist(bucketName, fileName);
 			GetObjectRequest getObjectRequest = new GetObjectRequest(bucketName, fileName);
-			ObjectMetadata s3Object = s3Client.getObject(getObjectRequest, new File("C:\\Users\\Robert\\Desktop\\ObjectContentFromS3Bucket.jpg"));
+			s3InputStream = s3Client.getObject(getObjectRequest).getObjectContent();
 			log.debug("Object with fileName [" + fileName + "] downloaded from bucket with bucketName [" + bucketName + "]");
-	        System.out.println(s3Object.toString());
-			//fileInputStream.close();
-		}
-		catch (FileNotFoundException e)
-		{
-			e.printStackTrace();
+			s3InputStream.close(); [???] Need to assing range in order to close the inputstream properly
 		}
 		catch (IOException e)
 		{
@@ -365,8 +344,27 @@ public class S3Sender extends SenderWithParametersBase
 		{
 			log.error("Failed to download object with fileName [" + fileName + "] from bucket with bucketName [" + bucketName + "]");			
 		}
+		catch(SenderException e) 
+		{
+			throw e;
+		} 
 		
-		return fileInputStream; 
+		try 
+		{
+			IPipeLineSession session=null;
+			if (prc!=null)
+			{
+				session=prc.getSession();
+				session.put(key, s3InputStream);				
+			}
+		}
+		catch(Exception e) 
+		{
+			throw new SenderException("Error during processing of the inputStream ", e);
+		}
+		
+		
+		return key; 
 	}
 	
 	//DONE! copies file from one bucket to another (new)bucket

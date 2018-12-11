@@ -32,41 +32,69 @@
 
 			<pipe
 				name="S3SendingPipe"
-				getInputFromFixedValue="Success.png"
-				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
+				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe"
+				getInputFromFixedValue="Success.png">
 				<sender	name="S3Sender"
 						className="nl.nn.adapterframework.senders.S3Sender"
 						bucketCreationEnabled="true"
 						bucketName="robert-demo-bucket"
 						actions="createBucket,upload,download"
 						>
-						<param name="fileName" value="testfile.png"/>
+						<!-- <param name="fileName" value="testfile.png"/> -->
 						<param name="file" sessionKey="fileFromDesktop"/>
-						<param name="destinationBucketName" value="robert-demo-bucket-n2"/>
-						<param name="destinationFileName" value="copiedObject.png"/>
 				</sender>
 				
-   				<forward name="success" path="EXIT" />
-			</pipe>	
+   				<!-- <forward name="success" path="EXIT" /> -->
+			</pipe>
+			
+			<pipe name="FilePipeWrite"
+				  className="nl.nn.adapterframework.pipes.FilePipe"
+				  getInputFromSessionKey="s3InputStreamKey"
+				  directory="C:\Users\Robert\Desktop\test files\"
+				  actions="write"
+				  fileName="file.png">
+			</pipe>
+			
+			<!-- <pipe
+				name="LocalSender"
+				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
+				<sender	name="IbisLocalSender"
+						className="nl.nn.adapterframework.senders.IbisLocalSender"
+						javaListener="JavaListenerForS3">
+				</sender>
+			</pipe> -->
+			
 		</pipeline>
 	</adapter>
 	
-	<!-- <adapter name="SQSListenerAdapter">
+	<adapter name="FileDownload">
 		<receiver
 			name="Receiver"
 			className="nl.nn.adapterframework.receivers.GenericReceiver">
 			<listener
-				name="SQSListener"
-				className="nl.nn.adapterframework.receivers.SQSListener"/>
+				name="JavaListenerForS3"
+				className="nl.nn.adapterframework.receivers.JavaListener"/>
 		</receiver>
-		<pipeline firstPipe="EchoPipe">
+		
+		<pipeline firstPipe="FilePipe">
 			<exits>
 				<exit path="EXIT" state="success"/>
 			</exits>
-			<pipe name="EchoPipe"
+			
+			<pipe name="FilePipe"
+				  className="nl.nn.adapterframework.pipes.FilePipe"
+				  getInputFromSessionKey="s3InputStream"
+				  directory="C:\Users\Robert\Desktop\test files\"
+				  actions="write"
+				  writeSuffix="file.png"
+				  outputType="stream">
+			</pipe>
+			
+			<!-- <pipe name="EchoPipe"
 				className="nl.nn.adapterframework.pipes.EchoPipe"
 				>
 			</pipe>
+			-->
 			<pipe name="EchoSenderPipe"
 				  className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
 				  <sender name="EchoSender"
@@ -74,5 +102,6 @@
 				  </sender>
 			</pipe>
 		</pipeline>
-	</adapter> -->
+		
+	</adapter>
 </module>
