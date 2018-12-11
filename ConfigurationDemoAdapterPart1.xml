@@ -1,6 +1,5 @@
 <module>
 	<adapter name="DemoAdapterPart1" active="${DemoAdapterPart1.active}">
-		
 		<receiver
 			name="Receiver"
 			className="nl.nn.adapterframework.receivers.GenericReceiver">
@@ -33,24 +32,47 @@
 
 			<pipe
 				name="S3SendingPipe"
-				getInputFromFixedValue="Success"
+				getInputFromFixedValue="Success.png"
 				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
 				<sender	name="S3Sender"
 						className="nl.nn.adapterframework.senders.S3Sender"
 						bucketCreationEnabled="true"
-						actions="mkBucket,upload,copy"
-						bucketName="robert-demo-bucket-n1"
+						bucketName="robert-demo-bucket"
+						actions="createBucket,upload,download"
 						>
-						<param name="objectKey" value="testfile.png"/>
+						<param name="fileName" value="testfile.png"/>
 						<param name="file" sessionKey="fileFromDesktop"/>
 						<param name="destinationBucketName" value="robert-demo-bucket-n2"/>
-						<param name="destinationObjectKey" value="copiedObject.png"/>
+						<param name="destinationFileName" value="copiedObject.png"/>
 				</sender>
 				
    				<forward name="success" path="EXIT" />
 			</pipe>	
-			
 		</pipeline>
-			
 	</adapter>
+	
+	<!-- <adapter name="SQSListenerAdapter">
+		<receiver
+			name="Receiver"
+			className="nl.nn.adapterframework.receivers.GenericReceiver">
+			<listener
+				name="SQSListener"
+				className="nl.nn.adapterframework.receivers.SQSListener"/>
+		</receiver>
+		<pipeline firstPipe="EchoPipe">
+			<exits>
+				<exit path="EXIT" state="success"/>
+			</exits>
+			<pipe name="EchoPipe"
+				className="nl.nn.adapterframework.pipes.EchoPipe"
+				>
+			</pipe>
+			<pipe name="EchoSenderPipe"
+				  className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
+				  <sender name="EchoSender"
+				  		  className="nl.nn.adapterframework.senders.EchoSender">
+				  </sender>
+			</pipe>
+		</pipeline>
+	</adapter> -->
 </module>

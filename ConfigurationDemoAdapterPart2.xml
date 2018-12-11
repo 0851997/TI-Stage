@@ -37,13 +37,11 @@
 				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
 				<sender	name="S3Sender"
 						className="nl.nn.adapterframework.senders.S3Sender"
-						actions="download,delete,rmBucket"
+						actions="download,delete,deleteBucket"
 						bucketName="robert-demo-bucket-n1"
 						>
 						<param name="objectKey" value="testfile.png"/>
 				</sender>
-				
-   				<forward name="success" path="EXIT" />
 			</pipe>	
 			
 		</pipeline>
