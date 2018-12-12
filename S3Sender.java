@@ -1,5 +1,5 @@
 /*
-   Copyright 2013 Nationale-Nederlanden
+   Copyright 2018 Nationale-Nederlanden
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -15,9 +15,6 @@
 */
 package nl.nn.adapterframework.senders;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -27,7 +24,6 @@ import java.util.StringTokenizer;
 import org.apache.commons.lang.StringUtils;
 
 import com.amazonaws.AmazonServiceException;
-import com.amazonaws.SdkClientException;
 import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3;
@@ -40,8 +36,6 @@ import com.amazonaws.services.s3.model.DeleteObjectRequest;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
-import com.amazonaws.services.s3.model.S3Object;
-import com.amazonaws.services.s3.model.S3ObjectInputStream;
 
 import nl.nn.adapterframework.configuration.ConfigurationException;
 import nl.nn.adapterframework.core.IPipeLineSession;
@@ -84,6 +78,7 @@ import nl.nn.adapterframework.parameters.ParameterValueList;
  * <li>sa-east-1, cn-north-1, cn-northwest-1, ca-central-1</li></ul></td><td>"eu-central-1"</td></tr>
  * <tr><td>{@link #setBucketName(String) bucketName}</td><td>Set a new or an existing name for S3 bucket depending on your actions</td><td></td></tr>
  * <tr><td>{@link #setFileName(String) fileName}</td><td>Set a new or an existing name for your file depending on your actions</td><td></td></tr>
+ * <tr><td>{@link #setStoreResultInSessionKey(String) storeResultInSessionKey}</td><td>Set a value for sessionKey in which result will be stored</td><td></td></tr>
  * </table>
  * </p>
  * 
@@ -138,8 +133,9 @@ public class S3Sender extends SenderWithParametersBase
 	private String actions;
 	private String bucketName;
 	private boolean bucketExistsThrowException = true;
+	private String storeResultInSessionKey;
 
-
+	
 	@Override
 	public void configure() throws ConfigurationException
 	{
@@ -325,20 +321,14 @@ public class S3Sender extends SenderWithParametersBase
 	//DONE! gets an file from S3 bucket
 	private String downloadObject(String bucketName, String fileName, ParameterResolutionContext prc) throws SenderException
 	{
-		String key = "s3InputStreamKey";
-		S3ObjectInputStream s3InputStream = null;
+		S3ObjectInputStreamCloser s3InputStream = null;
 		try
 		{
 			bucketDoesNotExist(bucketName);
 			fileDoesNotExist(bucketName, fileName);
 			GetObjectRequest getObjectRequest = new GetObjectRequest(bucketName, fileName);
-			s3InputStream = s3Client.getObject(getObjectRequest).getObjectContent();
+			s3InputStream = new S3ObjectInputStreamCloser(s3Client.getObject(getObjectRequest).getObjectContent());
 			log.debug("Object with fileName [" + fileName + "] downloaded from bucket with bucketName [" + bucketName + "]");
-			s3InputStream.close(); [???] Need to assing range in order to close the inputstream properly
-		}
-		catch (IOException e)
-		{
-			e.printStackTrace();
 		}
 		catch(AmazonServiceException e)
 		{
@@ -355,7 +345,7 @@ public class S3Sender extends SenderWithParametersBase
 			if (prc!=null)
 			{
 				session=prc.getSession();
-				session.put(key, s3InputStream);				
+				session.put(getStoreResultInSessionKey(), s3InputStream);				
 			}
 		}
 		catch(Exception e) 
@@ -363,8 +353,7 @@ public class S3Sender extends SenderWithParametersBase
 			throw new SenderException("Error during processing of the inputStream ", e);
 		}
 		
-		
-		return key; 
+		return getStoreResultInSessionKey();
 	}
 	
 	//DONE! copies file from one bucket to another (new)bucket
@@ -547,5 +536,15 @@ public class S3Sender extends SenderWithParametersBase
 	public void setBucketName(String bucketName)
 	{
 		this.bucketName = bucketName;
+	}
+
+	public String getStoreResultInSessionKey()
+	{
+		return storeResultInSessionKey;
+	}
+
+	public void setStoreResultInSessionKey(String storeResultInSessionKey)
+	{
+		this.storeResultInSessionKey = storeResultInSessionKey;
 	}
 }

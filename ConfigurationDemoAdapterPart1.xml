@@ -39,6 +39,7 @@
 						bucketCreationEnabled="true"
 						bucketName="robert-demo-bucket"
 						actions="createBucket,upload,download"
+						storeResultInSessionKey="s3InputStreamKey"
 						>
 						<!-- <param name="fileName" value="testfile.png"/> -->
 						<param name="file" sessionKey="fileFromDesktop"/>
