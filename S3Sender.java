@@ -29,13 +29,17 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.internal.BucketNameUtils;
+import com.amazonaws.services.s3.model.BucketAccelerateConfiguration;
+import com.amazonaws.services.s3.model.BucketAccelerateStatus;
 import com.amazonaws.services.s3.model.CopyObjectRequest;
 import com.amazonaws.services.s3.model.CreateBucketRequest;
 import com.amazonaws.services.s3.model.DeleteBucketRequest;
 import com.amazonaws.services.s3.model.DeleteObjectRequest;
+import com.amazonaws.services.s3.model.GetBucketAccelerateConfigurationRequest;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.SetBucketAccelerateConfigurationRequest;
 
 import nl.nn.adapterframework.configuration.ConfigurationException;
 import nl.nn.adapterframework.core.IPipeLineSession;
@@ -58,27 +62,27 @@ import nl.nn.adapterframework.parameters.ParameterValueList;
  * <b>Configuration:</b>
  * <table border="1">
  * <tr><th>attributes</th><th>description</th><th>default</th></tr>
- * <tr><td>{@link #setName(String) name}</td><td>Set a name for your sender</td><td></td></tr>
+ * <tr><td>{@link #setName(String) name}</td><td>This attribute is used for naming your S3 sender.</td><td></td></tr>
  * <tr><td>{@link #setChunkedEncodingDisabled(boolean) chunkedEncodingDisabled}</td><td>Configures the client to disable chunked encoding for all requests.</td><td>false</td></tr>
- * <tr><td>{@link #setAccelerateModeEnabled(boolean) accelerateModeEnabled}</td><td>Configures the client to use S3 accelerate endpoint for all requests. A bucket by default cannot be accessed in accelerate mode. If you wish to do so, you need to enable the accelerate configuration for the bucket in advance. (This includes extra costs)</td><td>false</td></tr>
+ * <tr><td>{@link #setAccelerateModeEnabled(boolean) accelerateModeEnabled}</td><td>Configures the client to use S3 accelerate endpoints and buckets created by [createBucket] action have bucketAccelerateConfiguration turned on by default. Buckets without bucketAccelerateConfiguration mode on cannot be accessed. (Making use of this service involves extra costs)</td><td>false</td></tr>
  * <tr><td>{@link #setForceGlobalBucketAccessEnabled(boolean) forceGlobalBucketAccessEnabled}</td><td>Configure whether global bucket access is enabled for this client. When enabled client in a specified region is allowed to create buckets in other regions.</td><td>false</td></tr>
  * <tr><td>{@link #setBucketCreationEnabled(boolean) bucketCreationEnabled}</td><td>Configuring this attribute and setting it to 'true' allows bucket creation when uploading/copying an file to a non-existent bucket. Otherwise an exception will be thrown.</td><td>false</td></tr>
- * <tr><td>{@link #setBucketNotificationEnabled(boolean) bucketNotificationEnabled}</td><td>Configure whether events within created bucket trigger notifications and send it to SQS queue for SQSListener</td><td></td>true</tr>
- * <tr><td>{@link #setActions(String) actions}</td><td>Available actions are (separated by comma actions can be used together, actions can only be performed on one bucket and file):
- * <ul><li>createBucket: create a new bucket inside Amazon S3</li>
- * <li>deleteBucket: delete an existing bucket from S3</li>
- * <li>upload: puts a file into a S3 bucket (file parameter required)</li>
- * <li>download: download an file from a S3 bucket and safe it as an InputStream for further use</li>
- * <li>copy: copies a file from one S3 bucket to another S3 bucket (destinationBucketName and destinationFileName parameter required)</li>
- * <li>delete: delete a file from inside a S3 bucket</li></ul></td><td></td></tr>
- * <tr><td>{@link #setClientRegion(String) clientRegion}</td><td>Set a region endpoint for this client to work with. Available regions are: 
+ * <tr><td>{@link #setClientRegion(String) clientRegion}</td><td>Set a region endpoint for this client to work with:
  * <ul><li>us-gov-west-1, us-east-1, us-east-2, us-west-1, us-west-2</li>
  * <li>eu-west-1, eu-west-2, eu-west-3, eu-central-1</li>
  * <li>ap-south-1, ap-southeast-1, ap-southeast-2, ap-northeast-1, ap-northeast-2</li>
- * <li>sa-east-1, cn-north-1, cn-northwest-1, ca-central-1</li></ul></td><td>"eu-central-1"</td></tr>
- * <tr><td>{@link #setBucketName(String) bucketName}</td><td>Set a new or an existing name for S3 bucket depending on your actions</td><td></td></tr>
- * <tr><td>{@link #setFileName(String) fileName}</td><td>Set a new or an existing name for your file depending on your actions</td><td></td></tr>
- * <tr><td>{@link #setStoreResultInSessionKey(String) storeResultInSessionKey}</td><td>Set a value for sessionKey in which result will be stored</td><td></td></tr>
+ * <li>sa-east-1, cn-north-1, cn-northwest-1, ca-central-1</li></ul>Requests that perform operations on S3 resources can only be done on set region unless forceGlobalBucketAccessEnabled is set to 'true'.</td><td>"eu-central-1"</td></tr>
+ * <tr><td>{@link #setBucketRegion(String) bucketRegion}</td><td>This attribute is used when forceGlobalBucketAccessEnabled is set to 'true' in order to access or create a bucket that is different location then the clientRegion.</td><td></td></tr>
+ * <tr><td>{@link #setBucketName(String) bucketName}</td><td>Set a name for a new or an existing bucket. (this is dependent on the action)</td><td></td></tr>
+ * <tr><td>{@link #setDestinationBucketName(String) destinationBucketName}</td><td>Set a name for a new or an existing destination bucket while performing [copy] action.</td><td></td></tr>
+ * <tr><td>{@link #setActions(String) actions}</td><td>Available actions are:
+ * <ul><li>createBucket: create a new bucket</li>
+ * <li>deleteBucket: delete an existing bucket</li>
+ * <li>upload: uploads a file into a bucket, when bucket doesn't exist bucketCreationEnabled can be set to 'true' so this action can also create a bucket (file parameter required)</li>
+ * <li>download: download a file from a S3 bucket and safe the InputStream in storeResultInSessionKey</li>
+ * <li>copy: copies a file from one bucket to another, when destination bucket doesn't exist bucketCreationEnabled can be set to 'true' so this action also creates a destination bucket (destinationBucketName and destinationFileName parameter required)</li>
+ * <li>delete: delete a file from inside a S3 bucket</li></ul></td><td></td></tr>
+ * <tr><td>{@link #setStoreResultInSessionKey(String) storeResultInSessionKey}</td><td>Set a value for sessionKey in which result will be stored.</td><td></td></tr>
  * </table>
  * </p>
  * 
@@ -86,9 +90,8 @@ import nl.nn.adapterframework.parameters.ParameterValueList;
  * <b>Parameters:</b>
  * <table border="1">
  * <tr><th>name</th><th>type</th><th>remarks</th></tr>
- * <tr><td>fileName</td><td><i>String</i></td><td>When an attribute with name fileName is configured, it is used instead of the message parameter</td></tr>
+ * <tr><td>fileName</td><td><i>String</i></td><td>(Optional) When an parameter with name fileName is configured, it is used instead of the message</td></tr>
  * <tr><td>file</td><td><i>Stream</i></td><td>This parameter contains InputStream, it must be present when performing upload action</td></tr>
- * <tr><td>destinationBucketName</td><td><i>String</i></td><td>This parameter specifies the name of destination bucket, it must be present when performing copy action</td></tr>
  * <tr><td>destinationFileName</td><td><i>String</i></td><td>This parameter specifies the name of the copied file, it must be present when performing copy action</td></tr>
  * </table>
  * </p>
@@ -111,29 +114,28 @@ import nl.nn.adapterframework.parameters.ParameterValueList;
  * </p>
  * 
  * @author R. Karajev
- * @author Robert Karajev
  */
 
 public class S3Sender extends SenderWithParametersBase
 {
-	//changed to static and final as it can be used from different classes and should not be changed
 	private static final List<String> AVAILABLE_REGIONS = getAvailableRegions();
 	private List<String> availableActions = Arrays.asList("createBucket", "deleteBucket", "upload", "download", "copy", "delete");
 	
-	//this doesnt have to be used senderbase already has this field*
-	private String name;
 	private AmazonS3ClientBuilder s3ClientBuilder;
 	private AmazonS3 s3Client;
+	private String name;
 	private boolean chunkedEncodingDisabled = false;
 	private boolean accelerateModeEnabled = false; // this may involve some extra costs
 	private boolean forceGlobalBucketAccessEnabled = false;
 	private boolean bucketCreationEnabled = false;
 	private String clientRegion = Regions.EU_WEST_1.getName();
 	private String bucketRegion;
-	private String actions;
 	private String bucketName;
-	private boolean bucketExistsThrowException = true;
+	private String destinationBucketName;
+	private String actions;
 	private String storeResultInSessionKey;
+
+	private boolean bucketExistsThrowException = true;
 
 	
 	@Override
@@ -162,10 +164,10 @@ public class S3Sender extends SenderWithParametersBase
 			if(!(action.equalsIgnoreCase("createBucket") || action.equalsIgnoreCase("deleteBucket")))
 			{				
 				if(action.equalsIgnoreCase("upload") && parameterList.findParameter("file") == null)
-					throw new ConfigurationException(getLogPrefix()+" file parameter requires to be present to perform [" + action + "]");
+					throw new ConfigurationException(getLogPrefix()+" file parameter requires to be present to perform [" + action + "] action");
 			
-				if(action.equalsIgnoreCase("copy") && parameterList.findParameter("destinationBucketName") == null && parameterList.findParameter("destinnationFileKey") == null)
-					throw new ConfigurationException(getLogPrefix()+" destinationBucketName parameter requires to be present to perform [" + action + "] for copying a file to another bucket");
+				if(action.equalsIgnoreCase("copy") && StringUtils.isEmpty(destinationBucketName) && parameterList.findParameter("destinationFileName") == null)
+					throw new ConfigurationException(getLogPrefix()+" destinationBucketName attribute and destinationFileName parameter requires to be present to perform [" + action + "] action");
 			}
 	    }
 				
@@ -177,17 +179,19 @@ public class S3Sender extends SenderWithParametersBase
                             				.withCredentials(new EnvironmentVariableCredentialsProvider());
 	}
 
-	//override???
+	@Override
 	public void open()
 	{
 		s3Client = s3ClientBuilder.build();
 	}
 
+	@Override
 	public void close()
 	{
 		s3Client.shutdown();
 	}
 
+	@Override
 	public String sendMessage(String correlationID, String message, ParameterResolutionContext prc) throws SenderException, TimeOutException
 	{
 		//fills ParameterValueList pvl with the set parameters from S3Sender
@@ -198,8 +202,8 @@ public class S3Sender extends SenderWithParametersBase
 			if (prc != null && paramList != null)
 				pvl = prc.getValues(paramList);
 			
-			if(pvl.getParameterValue("fileName") == null)
-				generalFileName = message;	
+			if(pvl == null || pvl.getParameterValue("fileName") == null)
+				generalFileName = message;
 			else
 				generalFileName = pvl.getParameterValue("fileName").getValue().toString(); //DONE this need to be fixed! When fileName parameter not assigned generalFileName is null somehow, how?
 		}
@@ -208,7 +212,9 @@ public class S3Sender extends SenderWithParametersBase
 			throw new SenderException(getLogPrefix() + "Sender [" + getName() + "] caught exception evaluating parameters", e);
 		}
 		catch (NullPointerException e)
-		{}
+		{
+			throw new SenderException(getLogPrefix() + "Sender [" + getName() + "] caught NullPointerException");
+		}
 		
 		StringTokenizer tokenizer = new StringTokenizer(getActions(), " ,\t\n\r\f");
 		String result = null;
@@ -220,13 +226,13 @@ public class S3Sender extends SenderWithParametersBase
 					throw new SenderException(getLogPrefix() + " no value found for the fileName and message parameter, atleast one value has to be assigned");
 			
 			if(action.equalsIgnoreCase("createBucket"))												//createBucket block
-				createBucket(getBucketName(), bucketExistsThrowException);
+				result = createBucket(getBucketName(), bucketExistsThrowException);
 			else if(action.equalsIgnoreCase("deleteBucket"))										//deleteBucket block
-				deleteBucket(getBucketName());
+				result = deleteBucket(getBucketName());
 			else if(action.equalsIgnoreCase("upload"))												//upload file block
 				if(pvl.getParameterValue("file") != null)
 					if(pvl.getParameterValue("file").getValue() != null)
-						uploadObject(getBucketName(), generalFileName, pvl);
+						result = uploadObject(getBucketName(), generalFileName, pvl);
 					else
 						throw new SenderException(getLogPrefix() + " no value was assinged for file parameter");
 				else
@@ -234,13 +240,13 @@ public class S3Sender extends SenderWithParametersBase
 			else if(action.equalsIgnoreCase("download"))											//download file block
 				result = downloadObject(getBucketName(), generalFileName, prc);
 			else if(action.equalsIgnoreCase("copy"))												//copy file block
-				if(pvl.getParameterValue("destinationBucketName") != null && pvl.getParameterValue("destinationFileName") != null)
-					if(pvl.getParameterValue("destinationBucketName").getValue() != null && pvl.getParameterValue("destinationFileName").getValue() != null)
+				if(pvl.getParameterValue("destinationFileName") != null)
+					if(pvl.getParameterValue("destinationFileName").getValue() != null)
 						result = copyObject(getBucketName(), generalFileName, pvl);
 					else
-						throw new SenderException(getLogPrefix() + " no value in destinationBucketName and/or destinationFileName parameter found, please assing values to the parameters to perfom [copy] action");
+						throw new SenderException(getLogPrefix() + " no value in destinationFileName parameter found, please assing value to the parameter to perfom [copy] action");
 				else
-					throw new SenderException(getLogPrefix() + " no destinationBucketName and/or destinationFileName parameter found, they must be used to perform [copy] action");
+					throw new SenderException(getLogPrefix() + " no destinationFileName parameter found, it must be used to perform [copy] action");
 			else if(action.equalsIgnoreCase("delete"))												//delete file block
 					result = deleteObject(getBucketName(), generalFileName);
 	    }
@@ -249,8 +255,17 @@ public class S3Sender extends SenderWithParametersBase
 		return result;
 	}
 	
-
-	private void createBucket(String bucketName, boolean bucketExistsThrowException) throws SenderException
+	 /**
+     * Creates a bucket on Amazon S3.
+     *
+     * @param bucketName
+     *            The desired name for a bucket that is about to be created. The class {@link BucketNameUtils} 
+     *            provides a method that can check if the bucketName is valid. This is done just before the bucketName is used here.
+     * @param bucketExistsThrowException
+     * 			  This parameter is used for controlling the behavior for weather an exception has to be thrown or not. 
+     * 			  In case of upload action being configured to be able to create a bucket, an exception will not be thrown when a bucket with assigned bucketName already exists.
+     */
+	private String createBucket(String bucketName, boolean bucketExistsThrowException) throws SenderException
 	{
 		try
 		{
@@ -263,19 +278,34 @@ public class S3Sender extends SenderWithParametersBase
 					createBucketRequest = new CreateBucketRequest(bucketName);			
 				s3Client.createBucket(createBucketRequest);
 				log.debug("Bucket with bucketName: ["+bucketName+"] is created.");
+				
+				if(isAccelerateModeEnabled())
+				{
+					s3Client.setBucketAccelerateConfiguration(new SetBucketAccelerateConfigurationRequest(bucketName, new BucketAccelerateConfiguration(BucketAccelerateStatus.Enabled)));
+					String accelerateStatus = s3Client.getBucketAccelerateConfiguration(new GetBucketAccelerateConfigurationRequest(bucketName)).getStatus();
+					log.debug("Bucket ["+bucketName+"] accelerate status: " + accelerateStatus);					
+				}
 			}
 			else
 				if(bucketExistsThrowException)
 					throw new SenderException(getLogPrefix() + " bucket with bucketName [" + bucketName + "] already exists, please specify a unique bucketName");
+			
 		}
 		catch(AmazonServiceException e)
 		{
 			log.warn("Failed to create bucket with bucketName ["+bucketName+"].");			
 		}
+		
+		return bucketName;
 	}
 	
-	//DONE! deletes a bucket
-	private void deleteBucket(String bucketName) throws SenderException
+	/**
+     * Deletes a bucket on Amazon S3.
+     *
+     * @param bucketName
+     *            The name for a bucket that is desired to be deleted.
+     */
+	private String deleteBucket(String bucketName) throws SenderException
 	{
 		try
 		{
@@ -288,16 +318,27 @@ public class S3Sender extends SenderWithParametersBase
 		{
 			log.warn("Failed to delete bucket with bucketName [" + bucketName + "].");			
 		}
+		
+		return bucketName;
 	}
 	
-	//DONE! uploads an InputStream to S3Bucket (as an file)
-	//TO-DO SambaSender upload methode algorithme voorbeeld toepassen!
+	
+	/**
+     * Uploads a file to Amazon S3 bucket.
+     *
+     * @param bucketName
+     *            The name of the bucket where the file shall be stored in.
+     * @param fileName
+     * 			  The name that shall be given to the file that is uploaded to Amazon S3 bucket. 
+     * @param pvl
+     * 			  This object is given in order to get the contents of the file that is assigned to be used.
+     */
 	private String uploadObject(String bucketName, String fileName, ParameterValueList pvl) throws SenderException
 	{	
 		try
 		{
 			if(!s3Client.doesBucketExistV2(bucketName))
-				bucketCreationForObjectAction(bucketName, !bucketExistsThrowException);
+				bucketCreationForObjectAction(bucketName);
 			if(!s3Client.doesObjectExist(bucketName, fileName))
 			{
 				InputStream inputStream = (InputStream) pvl.getParameterValue("file").getValue();
@@ -318,7 +359,15 @@ public class S3Sender extends SenderWithParametersBase
 		return fileName;
 	}
 	
-	//DONE! gets an file from S3 bucket
+	/**
+     * Downloads a file from Amazon S3 bucket.
+     *
+     * @param bucketName
+     *            The name of the bucket where the file is stored in.
+     * @param fileName
+     * 			  This parameter is used for controlling the behavior for weather an exception has to be thrown or not. 
+     * 			  In case of upload action being configured to be able to create a bucket, an exception will not be thrown when a bucket with assigned bucketName already exists.
+     */
 	private String downloadObject(String bucketName, String fileName, ParameterResolutionContext prc) throws SenderException
 	{
 		S3ObjectInputStreamCloser s3InputStream = null;
@@ -356,10 +405,18 @@ public class S3Sender extends SenderWithParametersBase
 		return getStoreResultInSessionKey();
 	}
 	
-	//DONE! copies file from one bucket to another (new)bucket
+	/**
+     * Copies a file from one Amazon S3 bucket to another one. 
+     *
+     * @param bucketName
+     *            The name of the bucket where the file is stored in.
+     * @param fileName
+     * 			  This is the name of the file that is desired to be copied.
+     * @param pvl
+     * 			  This object is given in order to get the contents of destinationFileName parameter for naming the new object within bucket where the file is copied to.
+     */
 	private String copyObject(String bucketName, String fileName, ParameterValueList pvl) throws SenderException
 	{
-		String destinationBucketName = pvl.getParameterValue("destinationBucketName").getValue().toString();
 		String destinationFileName = pvl.getParameterValue("destinationFileName").getValue().toString();				
 		try
 		{
@@ -367,8 +424,7 @@ public class S3Sender extends SenderWithParametersBase
 			fileDoesNotExist(bucketName, fileName);
 			if(BucketNameUtils.isValidV2BucketName(destinationBucketName))
 			{
-				boolean bucketExistsThrowsException = false;
-				bucketCreationForObjectAction(destinationBucketName, bucketExistsThrowsException);
+				bucketCreationForObjectAction(destinationBucketName);
 				if(!s3Client.doesObjectExist(destinationBucketName, destinationFileName))
 				{
 					CopyObjectRequest copyObjectRequest = new CopyObjectRequest(bucketName, fileName, destinationBucketName, destinationFileName);
@@ -389,7 +445,14 @@ public class S3Sender extends SenderWithParametersBase
 		return destinationFileName;
 	}
 	
-	//DONE! deletes an file from S3 bucket
+	/**
+     * Deletes a file from Amazon S3 bucket.
+     *
+     * @param bucketName
+     *            The name of the bucket where the file is stored in.
+     * @param fileName
+     * 			   
+     */
 	private String deleteObject(String bucketName, String fileName) throws SenderException
 	{
 		try
@@ -409,30 +472,51 @@ public class S3Sender extends SenderWithParametersBase
 		return fileName;
 	}
 
-
-	public void bucketCreationForObjectAction(String bucketName, boolean bucketExistsThrowException) throws SenderException
+	
+	/**
+     * This method is wrapper that makes possible for upload and copy actions to create a bucket. 
+     * Also in a case where a bucket already exists to not throw an exception. 
+     *
+     * @param bucketName
+     *            The name of the bucket that is addressed. 
+     */
+	public void bucketCreationForObjectAction(String bucketName) throws SenderException
 	{		
 		if(isBucketCreationEnabled())
-			createBucket(bucketName, bucketExistsThrowException);
+			createBucket(bucketName, !bucketExistsThrowException);
 		else
 			throw new SenderException(getLogPrefix() + " failed to create a bucket, to create a bucket bucketCreationEnabled attribute must be assinged to [true]");	
 	}
 
-	//when bucket 'does not exist' it throws an exception
+	/**
+     * This is a help method which throws an exception if a bucket does not exist.
+     *
+     * @param bucketName
+     *            The name of the bucket that is processed. 
+     */
 	public void bucketDoesNotExist(String bucketName) throws SenderException
 	{
 		if(!s3Client.doesBucketExistV2(bucketName))
 			throw new SenderException(getLogPrefix() + " bucket with bucketName [" + bucketName + "] does not exist, please specify the name of an existing bucket");
 	}
 	
-	//when file 'does not exist' it throws an exception
+	/**
+     * This is a help method which throws an exception if a file does not exist.
+     *
+     * @param bucketName
+     *            The name of the bucket where the file is stored in.
+     * @param fileName
+     * 			  The name of the file that is processed. 
+     */
 	public void fileDoesNotExist(String bucketName, String fileName) throws SenderException
 	{
 		if(!s3Client.doesObjectExist(bucketName, fileName))
-			throw new SenderException(getLogPrefix() + " file with given name does not exist, please specify the name of an existing file");
+			throw new SenderException(getLogPrefix() + " file with fileName ["+ fileName +"] does not exist, please specify the name of an existing file");
 	}
 	
-	//getters and setters
+	/**
+     * Static method which can be used to get all currently available regions.
+     */
 	public static List<String> getAvailableRegions()
 	{
 		//this method checks for available regions in AWS
@@ -446,13 +530,11 @@ public class S3Sender extends SenderWithParametersBase
 		return availableRegions;
 	}
 	
-	@Override
 	public String getName()
 	{
 		return name;
 	}
 
-	@Override
 	public void setName(String name)
 	{
 		this.name = name;
@@ -516,6 +598,16 @@ public class S3Sender extends SenderWithParametersBase
 	public void setBucketRegion(String bucketRegion)
 	{
 		this.bucketRegion = bucketRegion;
+	}
+
+	public String getDestinationBucketName()
+	{
+		return destinationBucketName;
+	}
+
+	public void setDestinationBucketName(String destinationBucketName)
+	{
+		this.destinationBucketName = destinationBucketName;
 	}
 
 	public String getActions()

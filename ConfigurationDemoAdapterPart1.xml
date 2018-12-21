@@ -68,7 +68,7 @@
 		</pipeline>
 	</adapter>
 	
-	<adapter name="FileDownload">
+<!-- 	<adapter name="FileDownload">
 		<receiver
 			name="Receiver"
 			className="nl.nn.adapterframework.receivers.GenericReceiver">
@@ -91,11 +91,11 @@
 				  outputType="stream">
 			</pipe>
 			
-			<!-- <pipe name="EchoPipe"
+			<pipe name="EchoPipe"
 				className="nl.nn.adapterframework.pipes.EchoPipe"
 				>
 			</pipe>
-			-->
+			
 			<pipe name="EchoSenderPipe"
 				  className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
 				  <sender name="EchoSender"
@@ -104,5 +104,107 @@
 			</pipe>
 		</pipeline>
 		
+	</adapter> -->
+	<adapter name="CreateBucket">
+		<receiver
+			name="ReceiverForCreate"
+			className="nl.nn.adapterframework.receivers.GenericReceiver">
+			<listener
+				name="MyListener"
+				className="nl.nn.adapterframework.receivers.JavaListener"/>
+		</receiver>
+		
+		<pipeline firstPipe="S3SendingPipe">
+			<exits>
+				<exit path="EXIT" state="success"/>
+			</exits>
+			<pipe
+				name="S3SendingPipe"
+				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
+				<sender	name="S3Sender"
+						className="nl.nn.adapterframework.senders.S3Sender"
+						bucketName="robert-demo-bucket"
+						actions="createBucket"
+						>
+				</sender>
+			</pipe>
+		</pipeline>
 	</adapter>
+	
+	<adapter name="UploadFileToBucket">
+		<receiver
+			name="ReceiverForUpload"
+			className="nl.nn.adapterframework.receivers.GenericReceiver">
+			<listener
+				name="MyListener2"
+				className="nl.nn.adapterframework.receivers.JavaListener"/>
+		</receiver>
+		
+		<pipeline firstPipe="FilePipe">
+			<exits>
+				<exit path="EXIT" state="success"/>
+			</exits>
+			
+			<pipe
+				name="FilePipe"
+				className="nl.nn.adapterframework.pipes.FilePipe"
+				directory="C:\Users\Robert\Desktop\test files\"
+				actions="read"
+				outputType="stream"
+				storeResultInSessionKey="fileFromDesktop"
+				>
+			</pipe>
+
+			<pipe
+				name="S3SendingPipe"
+				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe"
+				getInputFromSessionKey="originalMessage">
+				<sender	name="S3Sender"
+						className="nl.nn.adapterframework.senders.S3Sender"
+						bucketName="robert-demo-bucket"
+						actions="upload"
+						>
+						<param name="file" sessionKey="fileFromDesktop"/>
+				</sender>
+			</pipe>
+		</pipeline>
+	</adapter>
+	
+	<adapter name="DownloadFileFromBucket">
+		<receiver
+			name="ReceiverForDownload"
+			className="nl.nn.adapterframework.receivers.GenericReceiver">
+			<listener
+				name="MyListener3"
+				className="nl.nn.adapterframework.receivers.JavaListener"/>
+		</receiver>
+		
+		<pipeline firstPipe="S3SendingPipe">
+			<exits>
+				<exit path="EXIT" state="success"/>
+			</exits>
+
+			<pipe
+				name="S3SendingPipe"
+				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
+				<sender	name="S3Sender"
+						className="nl.nn.adapterframework.senders.S3Sender"
+						bucketName="robert-demo-bucket"
+						actions="download"
+						storeResultInSessionKey="s3InputStreamSessionKey"
+						>
+						<param name="file" sessionKey="fileFromDesktop"/>
+				</sender>
+			</pipe>
+			
+			<pipe name="FilePipeWrite"
+				  className="nl.nn.adapterframework.pipes.FilePipe"
+				  getInputFromSessionKey="s3InputStreamSessionKey"
+				  directory="C:\Users\Robert\Desktop\test files\"
+				  actions="write"
+				  fileName="FileFromAmazonS3.png">
+			</pipe>
+		</pipeline>
+	</adapter>
+	
 </module>

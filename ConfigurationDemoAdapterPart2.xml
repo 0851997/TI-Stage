@@ -1,6 +1,5 @@
 <module>
 	<adapter name="DemoAdapterPart2" active="${DemoAdapterPart2.active}">
-		
 		<receiver
 			name="Receiver"
 			className="nl.nn.adapterframework.receivers.GenericReceiver">
@@ -13,23 +12,6 @@
 			<exits>
 				<exit path="EXIT" state="success"/>
 			</exits>
-			
-<!--  			<pipe
-				name="saveFileName"
-				className="nl.nn.adapterframework.pipes.EchoPipe"
-				storeResultInSessionKey="fileName"
-				>
-			</pipe>
- -->
- 			<!-- <pipe
-				name="FilePipe"
-				className="nl.nn.adapterframework.pipes.FilePipe"
-				directory="C:\Users\Robert\Desktop\test files\"
-				actions="read"
-				outputType="stream"
-				storeResultInSessionKey="fileFromDesktop"
-				>
-			</pipe> -->
 
 			<pipe
 				name="S3SendingPipe"
@@ -45,6 +27,93 @@
 			</pipe>	
 			
 		</pipeline>
-			
 	</adapter>
+	
+	<adapter name="CopyFileToAnotherBucket">
+		<receiver
+			name="ReceiverForCopyFileToAnotherBucket"
+			className="nl.nn.adapterframework.receivers.GenericReceiver">
+			<listener
+				name="MyListener"
+				className="nl.nn.adapterframework.receivers.JavaListener"/>
+		</receiver>
+		
+		<pipeline firstPipe="S3SendingPipe">
+			<exits>
+				<exit path="EXIT" state="success"/>
+			</exits>
+
+			<pipe
+				name="S3SendingPipe"
+				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
+				<sender	name="S3Sender"
+						className="nl.nn.adapterframework.senders.S3Sender"
+						bucketCreationEnabled="true"
+						actions="copy"
+						bucketName="robert-demo-bucket"
+						destinationBucketName="robert-demo-bucket-n1"
+						>
+						<param name="destinationFileName" value="FileFromAnotherBucket.png"/>
+				</sender>
+			</pipe>	
+			
+		</pipeline>
+	</adapter>
+	
+	<adapter name="DeleteFile">
+		<receiver
+			name="ReceiverForDeletingFile"
+			className="nl.nn.adapterframework.receivers.GenericReceiver">
+			<listener
+				name="MyListener234"
+				className="nl.nn.adapterframework.receivers.JavaListener"/>
+		</receiver>
+		
+		<pipeline firstPipe="S3SendingPipe">
+			<exits>
+				<exit path="EXIT" state="success"/>
+			</exits>
+
+			<pipe
+				name="S3SendingPipe"
+				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe"
+				>
+				<sender	name="S3Sender"
+						className="nl.nn.adapterframework.senders.S3Sender"
+						actions="delete"
+						bucketName="robert-demo-bucket-n1"
+						>
+				</sender>
+			</pipe>	
+		</pipeline>
+	</adapter>
+	
+	<adapter name="DeleteBucket">
+		<receiver
+			name="ReceiverForDeleteBucket"
+			className="nl.nn.adapterframework.receivers.GenericReceiver">
+			<listener
+				name="MyListener"
+				className="nl.nn.adapterframework.receivers.JavaListener"/>
+		</receiver>
+		
+		<pipeline firstPipe="S3SendingPipe">
+			<exits>
+				<exit path="EXIT" state="success"/>
+			</exits>
+
+			<pipe
+				name="S3SendingPipe"
+				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
+				<sender	name="S3Sender"
+						className="nl.nn.adapterframework.senders.S3Sender"
+						actions="deleteBucket"
+						bucketName="robert-demo-bucket-n1"
+						>
+				</sender>
+			</pipe>	
+			
+		</pipeline>
+	</adapter>
+	
 </module>
