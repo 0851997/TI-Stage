@@ -15,14 +15,15 @@
 
 			<pipe
 				name="S3SendingPipe"
-				getInputFromFixedValue="Success"
 				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
 				<sender	name="S3Sender"
 						className="nl.nn.adapterframework.senders.S3Sender"
-						actions="download,delete,deleteBucket"
-						bucketName="robert-demo-bucket-n1"
+						bucketCreationEnabled="true"
+						actions="copy,delete,deleteBucket"
+						bucketName="robert-demo-bucket"
+						destinationBucketName="robert-demo-bucket-n1"
 						>
-						<param name="objectKey" value="testfile.png"/>
+						<param name="destinationFileName" value="FileFromAnotherBucket.png"/>
 				</sender>
 			</pipe>	
 			
