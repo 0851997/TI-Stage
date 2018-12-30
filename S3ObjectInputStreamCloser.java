@@ -20,6 +20,12 @@ import java.io.InputStream;
 
 import com.amazonaws.services.s3.model.S3ObjectInputStream;
 
+/**
+* <p>
+* This class is used for the download action. 
+* When a download action is performed this class is used to close the InputStream when there is nothing to be read.
+* </p>
+**/
 public class S3ObjectInputStreamCloser extends InputStream
 {
 	S3ObjectInputStream s3InputStream;

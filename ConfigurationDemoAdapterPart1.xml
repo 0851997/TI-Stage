@@ -35,7 +35,7 @@
 				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe"
 				getInputFromFixedValue="Success.png">
 				<sender	name="S3Sender"
-						className="nl.nn.adapterframework.senders.S3Sender"
+						className="nl.nn.adapterframework.senders.AmazonS3Sender"
 						bucketCreationEnabled="true"
 						bucketName="robert-demo-bucket"
 						actions="createBucket,upload,download"
@@ -122,7 +122,7 @@
 				name="S3SendingPipe"
 				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
 				<sender	name="S3Sender"
-						className="nl.nn.adapterframework.senders.S3Sender"
+						className="nl.nn.adapterframework.senders.AmazonS3Sender"
 						bucketName="robert-demo-bucket"
 						actions="createBucket"
 						>
@@ -160,7 +160,7 @@
 				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe"
 				getInputFromSessionKey="originalMessage">
 				<sender	name="S3Sender"
-						className="nl.nn.adapterframework.senders.S3Sender"
+						className="nl.nn.adapterframework.senders.AmazonS3Sender"
 						bucketName="robert-demo-bucket"
 						actions="upload"
 						>

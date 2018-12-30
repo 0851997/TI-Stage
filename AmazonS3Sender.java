@@ -116,7 +116,7 @@ import nl.nn.adapterframework.parameters.ParameterValueList;
  * @author R. Karajev
  */
 
-public class S3Sender extends SenderWithParametersBase
+public class AmazonS3Sender extends SenderWithParametersBase
 {
 	private static final List<String> AVAILABLE_REGIONS = getAvailableRegions();
 	private List<String> availableActions = Arrays.asList("createBucket", "deleteBucket", "upload", "download", "copy", "delete");
@@ -134,7 +134,7 @@ public class S3Sender extends SenderWithParametersBase
 	private String destinationBucketName;
 	private String actions;
 	private String storeResultInSessionKey;
-
+	
 	private boolean bucketExistsThrowException = true;
 
 	
@@ -474,8 +474,8 @@ public class S3Sender extends SenderWithParametersBase
 
 	
 	/**
-     * This method is wrapper that makes possible for upload and copy actions to create a bucket. 
-     * Also in a case where a bucket already exists to not throw an exception. 
+     * This method is wrapper which makes it possible for upload and copy actions to create a bucket and 
+     * in case a bucket already exists the operation will proceed without throwing an exception. 
      *
      * @param bucketName
      *            The name of the bucket that is addressed. 

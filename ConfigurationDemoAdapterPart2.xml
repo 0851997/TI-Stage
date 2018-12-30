@@ -48,7 +48,7 @@
 				name="S3SendingPipe"
 				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
 				<sender	name="S3Sender"
-						className="nl.nn.adapterframework.senders.S3Sender"
+						className="nl.nn.adapterframework.senders.AmazonS3Sender"
 						bucketCreationEnabled="true"
 						actions="copy"
 						bucketName="robert-demo-bucket"
@@ -80,7 +80,7 @@
 				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe"
 				>
 				<sender	name="S3Sender"
-						className="nl.nn.adapterframework.senders.S3Sender"
+						className="nl.nn.adapterframework.senders.AmazonS3Sender"
 						actions="delete"
 						bucketName="robert-demo-bucket-n1"
 						>
@@ -107,7 +107,7 @@
 				name="S3SendingPipe"
 				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
 				<sender	name="S3Sender"
-						className="nl.nn.adapterframework.senders.S3Sender"
+						className="nl.nn.adapterframework.senders.AmazonS3Sender"
 						actions="deleteBucket"
 						bucketName="robert-demo-bucket-n1"
 						>
