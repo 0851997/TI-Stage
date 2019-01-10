@@ -171,17 +171,18 @@ public class AmazonS3Sender extends SenderWithParametersBase
 			}
 	    }
 				
-		s3ClientBuilder = AmazonS3ClientBuilder.standard()
-											.withChunkedEncodingDisabled(isChunkedEncodingDisabled())
-                            				.withAccelerateModeEnabled(isAccelerateModeEnabled())
-                            				.withForceGlobalBucketAccessEnabled(isForceGlobalBucketAccessEnabled())
-                            				.withRegion(getClientRegion())
-                            				.withCredentials(new EnvironmentVariableCredentialsProvider());
 	}
 
 	@Override
 	public void open()
 	{
+		s3ClientBuilder = AmazonS3ClientBuilder.standard()
+				.withChunkedEncodingDisabled(isChunkedEncodingDisabled())
+				.withAccelerateModeEnabled(isAccelerateModeEnabled())
+				.withForceGlobalBucketAccessEnabled(isForceGlobalBucketAccessEnabled())
+				.withRegion(getClientRegion())
+				.withCredentials(new EnvironmentVariableCredentialsProvider());
+
 		s3Client = s3ClientBuilder.build();
 	}
 
@@ -265,7 +266,7 @@ public class AmazonS3Sender extends SenderWithParametersBase
      * 			  This parameter is used for controlling the behavior for weather an exception has to be thrown or not. 
      * 			  In case of upload action being configured to be able to create a bucket, an exception will not be thrown when a bucket with assigned bucketName already exists.
      */
-	private String createBucket(String bucketName, boolean bucketExistsThrowException) throws SenderException
+	protected String createBucket(String bucketName, boolean bucketExistsThrowException) throws SenderException
 	{
 		try
 		{
@@ -293,7 +294,8 @@ public class AmazonS3Sender extends SenderWithParametersBase
 		}
 		catch(AmazonServiceException e)
 		{
-			log.warn("Failed to create bucket with bucketName ["+bucketName+"].");			
+			log.warn("Failed to create bucket with bucketName ["+bucketName+"].");
+			throw new SenderException("Failed to create bucket with bucketName ["+bucketName+"].");
 		}
 		
 		return bucketName;
@@ -305,7 +307,7 @@ public class AmazonS3Sender extends SenderWithParametersBase
      * @param bucketName
      *            The name for a bucket that is desired to be deleted.
      */
-	private String deleteBucket(String bucketName) throws SenderException
+	protected String deleteBucket(String bucketName) throws SenderException
 	{
 		try
 		{
@@ -316,7 +318,8 @@ public class AmazonS3Sender extends SenderWithParametersBase
 		}
 		catch(AmazonServiceException e)
 		{
-			log.warn("Failed to delete bucket with bucketName [" + bucketName + "].");			
+			log.warn("Failed to delete bucket with bucketName [" + bucketName + "].");
+			throw new SenderException("Failed to delete bucket with bucketName [" + bucketName + "].");
 		}
 		
 		return bucketName;
@@ -333,7 +336,7 @@ public class AmazonS3Sender extends SenderWithParametersBase
      * @param pvl
      * 			  This object is given in order to get the contents of the file that is assigned to be used.
      */
-	private String uploadObject(String bucketName, String fileName, ParameterValueList pvl) throws SenderException
+	protected String uploadObject(String bucketName, String fileName, ParameterValueList pvl) throws SenderException
 	{	
 		try
 		{
@@ -353,7 +356,8 @@ public class AmazonS3Sender extends SenderWithParametersBase
 		}
 		catch(AmazonServiceException e)
 		{
-			log.warn("Failed to upload object with fileName [" + fileName + "] into bucket with bucketName [" + bucketName + "]");			
+			log.warn("Failed to upload object with fileName [" + fileName + "] into bucket with bucketName [" + bucketName + "]");
+			throw new SenderException("Failed to upload object with fileName [" + fileName + "] into bucket with bucketName [" + bucketName + "]");
 		}
 		
 		return fileName;
@@ -368,7 +372,7 @@ public class AmazonS3Sender extends SenderWithParametersBase
      * 			  This parameter is used for controlling the behavior for weather an exception has to be thrown or not. 
      * 			  In case of upload action being configured to be able to create a bucket, an exception will not be thrown when a bucket with assigned bucketName already exists.
      */
-	private String downloadObject(String bucketName, String fileName, ParameterResolutionContext prc) throws SenderException
+	protected String downloadObject(String bucketName, String fileName, ParameterResolutionContext prc) throws SenderException
 	{
 		S3ObjectInputStreamCloser s3InputStream = null;
 		try
@@ -382,11 +386,8 @@ public class AmazonS3Sender extends SenderWithParametersBase
 		catch(AmazonServiceException e)
 		{
 			log.error("Failed to download object with fileName [" + fileName + "] from bucket with bucketName [" + bucketName + "]");			
+			throw new SenderException("Failed to perform copy action from bucket ["+bucketName+"]");
 		}
-		catch(SenderException e) 
-		{
-			throw e;
-		} 
 		
 		try 
 		{
@@ -415,7 +416,7 @@ public class AmazonS3Sender extends SenderWithParametersBase
      * @param pvl
      * 			  This object is given in order to get the contents of destinationFileName parameter for naming the new object within bucket where the file is copied to.
      */
-	private String copyObject(String bucketName, String fileName, ParameterValueList pvl) throws SenderException
+	protected String copyObject(String bucketName, String fileName, ParameterValueList pvl) throws SenderException
 	{
 		String destinationFileName = pvl.getParameterValue("destinationFileName").getValue().toString();				
 		try
@@ -440,6 +441,7 @@ public class AmazonS3Sender extends SenderWithParametersBase
 		catch(AmazonServiceException e)
 		{
 			log.error("Failed to perform copy action from bucket ["+bucketName+"]");
+			throw new SenderException("Failed to perform copy action from bucket ["+bucketName+"]");
 		}
 
 		return destinationFileName;
@@ -453,7 +455,7 @@ public class AmazonS3Sender extends SenderWithParametersBase
      * @param fileName
      * 			   
      */
-	private String deleteObject(String bucketName, String fileName) throws SenderException
+	protected String deleteObject(String bucketName, String fileName) throws SenderException
 	{
 		try
 		{
@@ -466,6 +468,7 @@ public class AmazonS3Sender extends SenderWithParametersBase
 		catch(AmazonServiceException e)
 		{
 			log.error("Failed to perform copy action from bucket ["+bucketName+"]");
+			throw new SenderException("Failed to perform copy action from bucket ["+bucketName+"]");
 		}
 			
 		
@@ -475,7 +478,7 @@ public class AmazonS3Sender extends SenderWithParametersBase
 	
 	/**
      * This method is wrapper which makes it possible for upload and copy actions to create a bucket and 
-     * in case a bucket already exists the operation will proceed without throwing an exception. 
+     * incase a bucket already exists the operation will proceed without throwing an exception. 
      *
      * @param bucketName
      *            The name of the bucket that is addressed. 

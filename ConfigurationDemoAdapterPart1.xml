@@ -164,7 +164,7 @@
 						bucketName="robert-demo-bucket"
 						actions="upload"
 						>
-						<param name="file" sessionKey="fileFromDesktop"/>
+                        <param name="file" sessionKey="fileFromDesktop"/>
 				</sender>
 			</pipe>
 		</pipeline>
@@ -188,7 +188,7 @@
 				name="S3SendingPipe"
 				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
 				<sender	name="S3Sender"
-						className="nl.nn.adapterframework.senders.S3Sender"
+						className="nl.nn.adapterframework.senders.AmazonS3Sender"
 						bucketName="robert-demo-bucket"
 						actions="download"
 						storeResultInSessionKey="s3InputStreamSessionKey"

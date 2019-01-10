@@ -17,7 +17,7 @@
 				name="S3SendingPipe"
 				className="nl.nn.adapterframework.pipes.GenericMessageSendingPipe">
 				<sender	name="S3Sender"
-						className="nl.nn.adapterframework.senders.S3Sender"
+						className="nl.nn.adapterframework.senders.AmazonS3Sender"
 						bucketCreationEnabled="true"
 						actions="copy,delete,deleteBucket"
 						bucketName="robert-demo-bucket"
